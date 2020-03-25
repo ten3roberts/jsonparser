@@ -4,10 +4,13 @@
 
 int main()
 {
-	JSON* root = json_loadfile("grid.json");
-	if(root == NULL)
+	JSON* root = json_loadfile("./tests/example.json");
+	if (root == NULL)
 	{
-		printf("Invalid file");
+		printf("Invalid file\n");
 		return -1;
 	}
+
+
+	printf("Stop");
 }

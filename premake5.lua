@@ -10,27 +10,29 @@ function gen_tests()
 			kind "ConsoleApp"
 			language "C"
 			targetdir "bin"
+			debugdir "tests"
+
 			includedirs "./"
 			links ("json")
 			files (v)
+
+			filter "configurations:Debug"
+				defines { "DEBUG=1", "RELEASE=0" }
+				optimize "off"
+				symbols "on"
+	
+			 filter "configurations:Release"
+				defines { "DEBUG=0", "RELEASE=1" }
+				optimize "on"
+				symbols "off"
+
+			buildoptions "-Wall"
 	end
 end
 
 newoption {
 	trigger = "test",
 	description = "Build the tests",
-	execute = function()
-		for k, v in pairs(tests) do
-			print ("generating test", v)
-			project "test"
-				kind "ConsoleApp"
-				language "C"
-				targetdir "bin"
-				includedirs "./"
-				links ("json")
-				files (v)
-		end
-	end
 }
 
 workspace "jsonparser"
@@ -44,6 +46,7 @@ project "json"
 	kind "StaticLib"
 	language "C"
 	targetdir "bin"
+	debugdir "tests"
 
 	files { "src/**.h", "src/**.c" }
 
@@ -56,3 +59,5 @@ project "json"
 		defines { "DEBUG=0", "RELEASE=1" }
 		optimize "on"
 		symbols "off"
+
+	buildoptions "-Wall"
