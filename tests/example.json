@@ -1,5 +1,5 @@
 {
 	"name": "Adam",
-	"age": "17",
-	"balance": "100"
+	"age": 17e1,
+	"friends": ["Bert","Ceasar","David"]
 }

@@ -5,7 +5,7 @@ typedef struct JSON JSON;
 #define JSON_TINVALID 0
 #define JSON_TNULL	  1
 #define JSON_TSTRING  2
-#define JSON_TNUM	  4
+#define JSON_TNUMBER  4
 #define JSON_TOBJECT  8
 #define JSON_TARRAY	  16
 
@@ -25,7 +25,7 @@ char* json_load(JSON* object, char* str);
 void json_add_member(JSON* object, const char* name, JSON* value);
 
 // Insert an element to the end of a json array
-void json_add_element(JSON* object, JSON* value);
+void json_add_element(JSON* object, JSON* element);
 
 // Insert an element into arbitrary position in a json array
 // If index is greater than the length of the array, element will be inserted at the end

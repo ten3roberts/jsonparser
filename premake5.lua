@@ -14,6 +14,7 @@ function gen_tests()
 
 			includedirs "./"
 			links ("json")
+			links "m"
 			files (v)
 
 			filter "configurations:Debug"
@@ -48,6 +49,8 @@ project "json"
 	targetdir "bin"
 	debugdir "tests"
 
+	links "m"
+	
 	files { "src/**.h", "src/**.c" }
 
 	filter "configurations:Debug"

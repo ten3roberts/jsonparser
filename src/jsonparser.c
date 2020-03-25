@@ -2,6 +2,85 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+
+// Convert a json valid number representation from string to double
+char* stof(char* str, double* out)
+{
+	double result = 0;
+	// Signifies if read past period
+	int isfraction = 0;
+	// The value of the digit after period
+	int digitval = 1;
+	// Signifies if optional exponent is being read
+	int isexponent = 0;
+	// Value of exponent
+	int exponent = 0;
+	// The sign of the resulting value
+	int sign = 1;
+	if (*str == '-')
+		sign = -1;
+
+	for (; *str != '\0'; str++)
+	{
+		// Decimal place
+		if (*str == '.')
+		{
+			isfraction = 1;
+			continue;
+		}
+
+		// Exponent
+		if (*str == 'e' || *str == 'E')
+		{
+			if (isexponent)
+			{
+				JSON_MSG_FUNC("Can't have stacked exponents\n");
+				return 0;
+			}
+			isexponent = 1;
+			continue;
+		}
+		// End
+		// Increment past comma and return
+		if (*str == ',')
+		{
+			str++;
+			break;
+		}
+
+		// Break when not a valid number
+		// Triggered when next char is end of object or array wihtout comma
+		if (*str < '0' || *str > '9')
+		{
+			break;
+		}
+
+		int digit = *str - '0';
+		if (isexponent)
+		{
+			exponent *= 10;
+			exponent += digit;
+		}
+		else if (isfraction)
+		{
+			digitval *= 0.1;
+			result += digit;
+		}
+		// Normal digit
+		else
+		{
+			result *= 10;
+			result += digit;
+		}
+	}
+	result *= sign;
+	if (exponent != 0)
+		*out = result * powf(10, exponent);
+	else
+		*out = result;
+	return str;
+}
 
 struct JSON
 {
@@ -9,7 +88,7 @@ struct JSON
 
 	char* name;
 	char* stringval;
-	float numval;
+	double numval;
 	size_t depth;
 	struct JSON* members;
 
@@ -43,7 +122,7 @@ JSON* json_loadfile(const char* filepath)
 	root->depth = 0;
 	if (json_load(root, buf) == NULL)
 	{
-		JSON_MSG_FUNC("File %s contains none or invalid json data", filepath);
+		JSON_MSG_FUNC("File %s contains none or invalid json data\n", filepath);
 		free(root);
 		return NULL;
 	}
@@ -78,12 +157,6 @@ char* json_load(JSON* object, char* str)
 			if (c == ' ' || c == '\t' || c == '\n')
 				continue;
 
-			// The end of the object
-			if (!in_quotes && c == '}')
-			{
-				return str + 1;
-			}
-
 			// Start quote
 			if (!in_quotes && c == '"')
 			{
@@ -99,7 +172,7 @@ char* json_load(JSON* object, char* str)
 				in_quotes = 0;
 				if (opening_quote == NULL)
 				{
-					JSON_MSG_FUNC("Mismatched quote on line %10s", str - 5);
+					JSON_MSG_FUNC("Mismatched quote on line %10s\n", str - 5);
 					return NULL;
 				}
 				size_t lname = str - opening_quote;
@@ -126,14 +199,23 @@ char* json_load(JSON* object, char* str)
 				char* tmp_buf = json_load(new_object, str);
 				if (tmp_buf == NULL)
 				{
-					JSON_MSG_FUNC("Invalid json");
+					JSON_MSG_FUNC("Invalid json\n");
+					json_destroy(new_object);
 				}
-				str = tmp_buf;
+				else
+				{
+					str = tmp_buf;
+				}
 
 				// Insert member
 				json_add_member(object, tmp_name, new_object);
 				free(tmp_name);
-				continue;
+			}
+
+			// The end of the object
+			if (!in_quotes && *str == '}')
+			{
+				return str + 1;
 			}
 		}
 	}
@@ -144,8 +226,6 @@ char* json_load(JSON* object, char* str)
 		object->type = JSON_TARRAY;
 		int in_quotes = 0;
 
-		char* opening_quote = NULL;
-		char* tmp_name = NULL;
 		str++;
 		for (; *str != '\0'; str++)
 		{
@@ -156,29 +236,37 @@ char* json_load(JSON* object, char* str)
 				continue;
 
 			// The end of the array
-			if (!in_quotes && c == ']')
+			if (*str == ']')
 			{
 				return str + 1;
 			}
 
 			// Read elements of array
-			if (!in_quotes && c == ':')
+
+			// Load the json with what is after the ':'
 			{
-				// Load the json with what is after the ':'
 				JSON* new_object = malloc(sizeof(JSON));
 
 				// Load the element from the string
 				char* tmp_buf = json_load(new_object, str);
 				if (tmp_buf == NULL)
 				{
-					JSON_MSG_FUNC("Invalid json");
+					JSON_MSG_FUNC("Invalid json\n");
+					json_destroy(new_object);
 				}
-				str = tmp_buf;
+				else
+				{
+					str = tmp_buf;
+				}
 
-				// Insert child
-				json_add_member(object, tmp_name, new_object);
-				free(tmp_name);
-				continue;
+				// Insert element at end
+				json_add_element(object, new_object);
+			}
+
+			// The end of the array
+			if (*str == ']')
+			{
+				return str + 1;
 			}
 		}
 	}
@@ -186,7 +274,7 @@ char* json_load(JSON* object, char* str)
 	// String
 	else if (str[0] == '"')
 	{
-		object->type == JSON_TSTRING;
+		object->type = JSON_TSTRING;
 		// Skip start quote
 		str++;
 		char* start = str;
@@ -197,7 +285,7 @@ char* json_load(JSON* object, char* str)
 
 			if (c == '\t' || c == '\n')
 			{
-				JSON_MSG_FUNC("Invalid character in string %10s, control characters must be escaped", str - 5);
+				JSON_MSG_FUNC("Invalid character in string %10s, control characters must be escaped\n", str - 5);
 				return NULL;
 			}
 
@@ -214,8 +302,14 @@ char* json_load(JSON* object, char* str)
 			}
 		}
 	}
+	// Number
+	else if ((*str > '0' && *str < '9') || *str == '-' || *str == '+')
+	{
+		object->type = JSON_TNUMBER;
+		return stof(str, &object->numval);
+	}
 
-	return str;
+	return NULL;
 }
 
 void json_add_member(JSON* object, const char* name, JSON* value)
@@ -230,40 +324,54 @@ void json_add_member(JSON* object, const char* name, JSON* value)
 	if (object->members == NULL)
 	{
 		object->members = value;
+		return;
 	}
-	else
+
+	// Traverse to end of array
+	JSON* it = object->members;
+	while (it->next)
 	{
-		// Insert at beginning of linked list
-		object->members->prev = value;
-		value->next = object->members;
-		object->members = value;
+		it = it->next;
 	}
+	it->next = value;
+	value->prev = it;
 }
 
-void json_add_element(JSON* object, JSON* value)
+void json_add_element(JSON* object, JSON* element)
 {
+	element->depth = object->depth + 1;
+
+	if (object->members == NULL)
+	{
+		object->members = element;
+		return;
+	}
+
 	JSON* it = object->members;
 	// Traverse to end of array
 	while (it->next)
 	{
 		it = it->next;
 	}
-	it->next = value;
+	it->next = element;
+	element->prev = it;
 }
 
 void json_insert_element(JSON* object, size_t index, JSON* element)
 {
+	element->depth = object->depth + 1;
+
 	JSON* it = object->members;
 	size_t i = 0;
 	// Jump to index or end of array
-	while(i < index && it->next)
+	while (i < index && it->next)
 	{
 		it = it->next;
 		i++;
 	}
 	element->prev = it;
 	JSON* eit = element;
-	while(eit->next)
+	while (eit->next)
 	{
 		eit = eit->next;
 	}
@@ -272,6 +380,14 @@ void json_insert_element(JSON* object, size_t index, JSON* element)
 
 void json_destroy(JSON* object)
 {
+	JSON* it = object->members;
+	while (it)
+	{
+		JSON* next = it->next;
+		json_destroy(it);
+		it = next;
+	}
+
 	if (object->name)
 	{
 		free(object->name);
@@ -285,12 +401,7 @@ void json_destroy(JSON* object)
 	}
 
 	object->numval = 0;
+	object->type = JSON_TINVALID;
 
-	JSON* it = object->members;
-	while (it)
-	{
-		JSON* next = it->next;
-		json_destroy(it);
-		it = next;
-	}
+	free(object);
 }

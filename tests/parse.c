@@ -12,5 +12,5 @@ int main()
 	}
 
 
-	printf("Stop");
+	json_destroy(root);
 }
