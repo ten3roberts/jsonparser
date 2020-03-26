@@ -83,6 +83,97 @@ char* stof(char* str, double* out)
 	return str;
 }
 
+// Reads from start quote to end quote and takes escape characters into consideration
+// Allocates memory for output string; need to be freed manually
+char* read_quote(char* str, char** out)
+{
+	// Skip past start quote
+	while (*str != '"')
+		str++;
+	str++;
+	char* start = str;
+
+	// Iterator for the object stringval
+	size_t lval = 2;
+	*out = malloc(lval);
+	char* result = *out;
+	size_t valit = 0;
+	// Loop to end of quote
+	for (; *str != '\0'; str++)
+	{
+		char c = *str;
+
+		// Allocate more space for string
+		if (valit + 1 >= lval)
+		{
+			lval *= 2;
+			char* tmp = realloc(*out, lval);
+			if (tmp == NULL)
+			{
+				JSON_MSG_FUNC("Failed to allocate memory for string value\n");
+				return str;
+			}
+			*out = tmp;
+			result = *out;
+		}
+
+		// Escape sequence
+		if (c == '\\')
+		{
+			switch (str[1])
+			{
+			case '"':
+				result[valit++] = '"';
+				break;
+			case '\\':
+				result[valit++] = '\\';
+				break;
+			case '/':
+				result[valit++] = '/';
+				break;
+			case 'b':
+				result[valit++] = '\b';
+				break;
+			case 'f':
+				result[valit++] = '\f';
+				break;
+			case 'n':
+				result[valit++] = '\n';
+				break;
+			case 'r':
+				result[valit++] = '\r';
+				break;
+			case 't':
+				result[valit++] = '\t';
+				break;
+			default:
+				JSON_MSG_FUNC("Invalid escape sequence\n");
+				break;
+			}
+			str++;
+			continue;
+		}
+
+		if (IS_WHITESPACE(c))
+		{
+			JSON_MSG_FUNC("Invalid character in string %10s, control characters must be escaped\n", str);
+			return NULL;
+		}
+
+		// End quote
+		if (c == '"')
+		{
+			result[valit++] = '\0';
+			return str + 1;
+		}
+
+		// Normal character
+		result[valit++] = c;
+	}
+	JSON_MSG_FUNC("Unexpected end of string\n");
+	return str;
+}
+
 struct JSON
 {
 	int type;
@@ -150,44 +241,29 @@ char* json_load(JSON* object, char* str)
 		char* opening_quote = NULL;
 		char* tmp_name = NULL;
 		str++;
-		for (;*str != '\0'; str++)
+		for (; *str != '\0'; str++)
 		{
-			char c = *str;
-
 			// Skip whitespace
-			if (IS_WHITESPACE(c))
+			if (IS_WHITESPACE(*str))
 			{
 				continue;
 			}
 
-			// Start quote
-			if (!in_quotes && c == '"')
+			// Read the name
+			if (*str == '"')
 			{
-				in_quotes = 1;
-				opening_quote = str + 1;
-				continue;
-			}
-
-			// The quote for the name has ended
-			// Save the name of the key
-			if (in_quotes && c == '"')
-			{
-				in_quotes = 0;
-				if (opening_quote == NULL)
+				char* tmp = read_quote(str, &tmp_name);
+				if (tmp == NULL)
 				{
-					JSON_MSG_FUNC("Mismatched quote on line %10s\n", str - 5);
-					return NULL;
+					JSON_MSG_FUNC("Error reading characters in string\n");
+					break;
 				}
-				size_t lname = str - opening_quote;
-				tmp_name = malloc(lname + 1);
-				memcpy(tmp_name, opening_quote, lname);
-				tmp_name[lname] = '\0';
-				continue;
+				str = tmp;
 			}
 
 			// Next side of key value pair
 			// After reading the key, recursively load the value
-			if (!in_quotes && c == ':')
+			if (*str == ':')
 			{
 				// Jump over ':'
 				str++;
@@ -243,14 +319,11 @@ char* json_load(JSON* object, char* str)
 		int in_quotes = 0;
 
 		str++;
-		for (;*str != '\0'; str++)
+		for (; *str != '\0'; str++)
 		{
-			char c = *str;
-
 			// Skip whitespace
-			if (c == ' ' || c == '\t' || c == '\n')	
+			if (IS_WHITESPACE(*str))
 				continue;
-			
 
 			// The end of the array
 			if (*str == ']')
@@ -302,32 +375,7 @@ char* json_load(JSON* object, char* str)
 	else if (str[0] == '"')
 	{
 		object->type = JSON_TSTRING;
-		// Skip start quote
-		str++;
-		char* start = str;
-		// Loop to end of quote
-		for (; *str != '\0'; str++)
-		{
-			char c = *str;
-
-			if (c == '\t' || c == '\n')
-			{
-				JSON_MSG_FUNC("Invalid character in string %10s, control characters must be escaped\n", str - 5);
-				return NULL;
-			}
-
-			// End quote
-			if (c == '"')
-			{
-				size_t lval = str - start;
-				object->stringval = malloc(lval + 1);
-				memcpy(object->stringval, start, lval);
-				object->stringval[lval] = '\0';
-
-				// Jump to next element
-				return str + 1;
-			}
-		}
+		return read_quote(str, &object->stringval);
 	}
 	// Number
 	else if ((*str > '0' && *str < '9') || *str == '-' || *str == '+')
@@ -337,26 +385,27 @@ char* json_load(JSON* object, char* str)
 	}
 
 	// Bool true
-	else if(strncmp(str, "true", 4) == 0)
+	else if (strncmp(str, "true", 4) == 0)
 	{
 		object->type = JSON_TBOOL;
 		object->numval = 1;
-		return str+4;
+		return str + 4;
 	}
 
 	// Bool true
-	else if(strncmp(str, "false", 5) == 0)
+	else if (strncmp(str, "false", 5) == 0)
 	{
 		object->type = JSON_TBOOL;
 		object->numval = 0;
-		return str+5;
+		return str + 5;
 	}
 
-	else if(strncmp(str, "null", 4) == 0)
+	else if (strncmp(str, "null", 4) == 0)
 	{
 		object->type = JSON_TNULL;
-		return str+4;
+		return str + 4;
 	}
+
 	return NULL;
 }
 
@@ -449,7 +498,6 @@ void json_destroy(JSON* object)
 		free(object->name);
 		object->name = NULL;
 	}
-
 	if (object->stringval)
 	{
 		free(object->stringval);
