@@ -4,6 +4,8 @@
 #include <string.h>
 #include <math.h>
 
+#define IS_WHITESPACE(c) (c == ' ' || c == '\n' || c == '\r' || c == '\t')
+
 // Convert a json valid number representation from string to double
 char* stof(char* str, double* out)
 {
@@ -11,7 +13,7 @@ char* stof(char* str, double* out)
 	// Signifies if read past period
 	int isfraction = 0;
 	// The value of the digit after period
-	int digitval = 1;
+	double digitval = 1;
 	// Signifies if optional exponent is being read
 	int isexponent = 0;
 	// Value of exponent
@@ -42,10 +44,9 @@ char* stof(char* str, double* out)
 			continue;
 		}
 		// End
-		// Increment past comma and return
+		// Keep comma and return
 		if (*str == ',')
 		{
-			str++;
 			break;
 		}
 
@@ -65,7 +66,7 @@ char* stof(char* str, double* out)
 		else if (isfraction)
 		{
 			digitval *= 0.1;
-			result += digit;
+			result += digit * digitval;
 		}
 		// Normal digit
 		else
@@ -149,19 +150,21 @@ char* json_load(JSON* object, char* str)
 		char* opening_quote = NULL;
 		char* tmp_name = NULL;
 		str++;
-		for (; *str != '\0'; str++)
+		for (;*str != '\0'; str++)
 		{
 			char c = *str;
 
 			// Skip whitespace
-			if (c == ' ' || c == '\t' || c == '\n')
+			if (IS_WHITESPACE(c))
+			{
 				continue;
+			}
 
 			// Start quote
 			if (!in_quotes && c == '"')
 			{
 				in_quotes = 1;
-				opening_quote = str + 1;
+				opening_quote = str;
 				continue;
 			}
 
@@ -210,6 +213,19 @@ char* json_load(JSON* object, char* str)
 				// Insert member
 				json_add_member(object, tmp_name, new_object);
 				free(tmp_name);
+
+				// Skip to next comma or quit
+				for (; *str != '\0'; str++)
+				{
+					if (*str == ',')
+						break;
+					if (*str == '}')
+						return str + 1;
+					if (IS_WHITESPACE(*str))
+						continue;
+					JSON_MSG_FUNC("Unexpected character before comma\n");
+					return str;
+				}
 			}
 
 			// The end of the object
@@ -227,23 +243,21 @@ char* json_load(JSON* object, char* str)
 		int in_quotes = 0;
 
 		str++;
-		for (; *str != '\0'; str++)
+		for (;*str != '\0'; str++)
 		{
 			char c = *str;
 
 			// Skip whitespace
-			if (c == ' ' || c == '\t' || c == '\n')
+			if (c == ' ' || c == '\t' || c == '\n')	
 				continue;
+			
 
 			// The end of the array
 			if (*str == ']')
-			{
 				return str + 1;
-			}
 
 			// Read elements of array
 
-			// Load the json with what is after the ':'
 			{
 				JSON* new_object = malloc(sizeof(JSON));
 
@@ -261,6 +275,19 @@ char* json_load(JSON* object, char* str)
 
 				// Insert element at end
 				json_add_element(object, new_object);
+
+				// Skip to next comma or quit
+				for (; *str != '\0'; str++)
+				{
+					if (*str == ',')
+						break;
+					if (*str == ']')
+						return str + 1;
+					if (IS_WHITESPACE(*str))
+						continue;
+					JSON_MSG_FUNC("Unexpected character before comma\n");
+					return str;
+				}
 			}
 
 			// The end of the array
@@ -327,10 +354,19 @@ void json_add_member(JSON* object, const char* name, JSON* value)
 		return;
 	}
 
-	// Traverse to end of array
+	// Traverse to end of array and look for duplicate
 	JSON* it = object->members;
 	while (it->next)
 	{
+		// Replace duplicate
+		if (strcmp(value->name, it->name) == 0)
+		{
+			value->next = it->next;
+			value->prev = it->prev;
+			it->next->prev = value;
+			it->prev->next = value;
+			return;
+		}
 		it = it->next;
 	}
 	it->next = value;
@@ -359,8 +395,6 @@ void json_add_element(JSON* object, JSON* element)
 
 void json_insert_element(JSON* object, size_t index, JSON* element)
 {
-	element->depth = object->depth + 1;
-
 	JSON* it = object->members;
 	size_t i = 0;
 	// Jump to index or end of array
@@ -374,6 +408,7 @@ void json_insert_element(JSON* object, size_t index, JSON* element)
 	while (eit->next)
 	{
 		eit = eit->next;
+		eit->depth = object->depth + 1;
 	}
 	eit->next = it->next;
 }

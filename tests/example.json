@@ -1,5 +1,5 @@
 {
 	"name": "Adam",
-	"age": 17e1,
-	"friends": ["Bert","Ceasar","David"]
+	"age": 1.5e1,
+	"friends": [  	"Bert",  "Ceasar",  "David"]
 }
