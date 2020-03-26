@@ -1,5 +1,12 @@
 {
 	"name": "Adam",
-	"age": 1.5e1,
-	"friends": [  	"Bert",  "Ceasar",  "David"]
+	"age": 17,
+	"friends": [
+		"Bert",
+		"Ceasar",
+		"David"
+	],
+	"lover": null,
+	"inschool: true,
+	"inwork": false
 }

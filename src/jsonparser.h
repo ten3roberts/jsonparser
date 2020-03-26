@@ -6,12 +6,20 @@ typedef struct JSON JSON;
 #define JSON_TNULL	  1
 #define JSON_TSTRING  2
 #define JSON_TNUMBER  4
-#define JSON_TOBJECT  8
-#define JSON_TARRAY	  16
+#define JSON_TBOOL	  8
+#define JSON_TOBJECT  16
+#define JSON_TARRAY	  32
 
 // Defines the function the json parser will use to print error messages
 // Usage should be like printf and support %s flag
 #define JSON_MSG_FUNC printf
+
+JSON* json_create_empty();
+JSON* json_create_null();
+JSON* json_create_string(const char* string);
+JSON* json_create_number(double value);
+JSON* json_create_object();
+JSON* json_create_array();
 
 // Loads a json file recusively from a file
 JSON* json_loadfile(const char* filepath);

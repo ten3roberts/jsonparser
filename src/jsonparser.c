@@ -164,7 +164,7 @@ char* json_load(JSON* object, char* str)
 			if (!in_quotes && c == '"')
 			{
 				in_quotes = 1;
-				opening_quote = str;
+				opening_quote = str + 1;
 				continue;
 			}
 
@@ -336,6 +336,27 @@ char* json_load(JSON* object, char* str)
 		return stof(str, &object->numval);
 	}
 
+	// Bool true
+	else if(strncmp(str, "true", 4) == 0)
+	{
+		object->type = JSON_TBOOL;
+		object->numval = 1;
+		return str+4;
+	}
+
+	// Bool true
+	else if(strncmp(str, "false", 5) == 0)
+	{
+		object->type = JSON_TBOOL;
+		object->numval = 0;
+		return str+5;
+	}
+
+	else if(strncmp(str, "null", 4) == 0)
+	{
+		object->type = JSON_TNULL;
+		return str+4;
+	}
 	return NULL;
 }
 
