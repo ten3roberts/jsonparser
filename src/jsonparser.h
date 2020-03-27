@@ -3,25 +3,41 @@
 typedef struct JSON JSON;
 
 #define JSON_TINVALID 0
-#define JSON_TNULL	  1
-#define JSON_TSTRING  2
-#define JSON_TNUMBER  4
-#define JSON_TBOOL	  8
-#define JSON_TOBJECT  16
-#define JSON_TARRAY	  32
+#define JSON_TOBJECT  1
+#define JSON_TARRAY	  2
+#define JSON_TSTRING  4
+#define JSON_TNUMBER  8
+#define JSON_TBOOL	  16
+#define JSON_TNULL	  32
 
 // Defines the function the json parser will use to print error messages
 // Usage should be like printf and support %s flag
 #define JSON_MSG_FUNC printf
 
+// Creates an empty json with invalid type
 JSON* json_create_empty();
+// Creates a valid json null
 JSON* json_create_null();
-JSON* json_create_string(const char* string);
+
+// Creates a json string
+// string is copied internally and can be freed afterwards
+JSON* json_create_string(const char* str);
+
+// Creates a json number
 JSON* json_create_number(double value);
+
+// Creates an empty json object with no members
 JSON* json_create_object();
+
+// Creates an empty json array with no elements
 JSON* json_create_array();
 
-// Loads a json file recusively from a file
+// Allocates and returns a json structure as a string
+// Returned string needs to be manually freed
+// String contains tabs or linefeeds
+char* json_tostring(JSON* object);
+
+// Loads a json file recusively from a file into memory
 JSON* json_loadfile(const char* filepath);
 
 // Loads a json object from a string

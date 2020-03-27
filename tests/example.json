@@ -6,7 +6,9 @@
 		"Ceasar",
 		"David"
 	],
-	"lover": null,
-	"inschool": true,
-	"inwork": false
+	"lover": {
+		"name": "Elize",
+		"age": 18
+	},
+	"house": null
 }

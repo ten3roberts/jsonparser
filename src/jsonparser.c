@@ -6,6 +6,124 @@
 
 #define IS_WHITESPACE(c) (c == ' ' || c == '\n' || c == '\r' || c == '\t')
 
+struct StringStream
+{
+	// The internal string pointer
+	char* str;
+	// The allocated size of the string
+	size_t size;
+	// How much has been written to the string
+	// Does not include the null terminator
+	size_t length;
+};
+
+void ss_write(struct StringStream* ss, char* str)
+{
+	if (str == NULL)
+	{
+		JSON_MSG_FUNC("Error writing invalid string");
+	}
+	const size_t lstr = strlen(str);
+	// Allocate first time
+	if (ss->str == NULL)
+	{
+		ss->size = 8;
+		ss->str = malloc(8);
+	}
+
+	// Resize
+	if (ss->length + lstr + 1 > ss->size)
+	{
+
+		ss->size = ss->size << (size_t)log2(lstr + 1);
+		char* tmp = realloc(ss->str, ss->size);
+		if (tmp == NULL)
+		{
+			JSON_MSG_FUNC("Failed to allocate memory for string stream\n");
+			return;
+		}
+		ss->str = tmp;
+	}
+
+	// Copy data
+	memcpy(ss->str + ss->length, str, lstr);
+	ss->length += lstr;
+	// Null terminate
+	ss->str[ss->length] = '\0';
+}
+
+float max(float a, float b)
+{
+	return (a > b ? a : b);
+}
+
+// Converts a double to a string
+// Precision indicates the max digits to include after the comma
+// Prints up to precision digits after the comma, can write less. Can be used to print integers, where the comma is not
+// written Returns how many characters were written
+int ftos(double num, char* buf, int precision)
+{
+	if (isinf(num))
+	{
+		if (num < 0)
+			*buf++ = '-';
+		*buf++ = 'i';
+		*buf++ = 'n';
+		*buf++ = 'f';
+		*buf++ = '\0';
+		return num < 0 ? 4 : 3;
+	}
+
+	// Save the sign and remove it from num
+	int neg = num < 0;
+	if (neg)
+		num *= -1;
+	// Shift decimal to precision places to an int
+	size_t a = num * pow(10, precision + 1);
+
+	if (a % 10 >= 5)
+		a += 10;
+	a /= 10;
+
+	int dec_pos = precision;
+
+	// Carried the one, need to round once more
+	while (a % 10 == 0 && a && a > num)
+	{
+		if (a % 10 >= 5)
+			a += 10;
+		a /= 10;
+		dec_pos--;
+	}
+
+	int base = 10;
+	char numerals[17] = {"0123456789ABCDEF"};
+
+	// Return and write one character if float == 0 to precision accuracy
+	if (a == 0)
+	{
+		*buf++ = '0';
+		*buf = '\0';
+		return 1;
+	}
+
+	size_t buf_index = log10(a) + (dec_pos ? 2 : 1) + max(dec_pos - log10(a), 0) + neg;
+	int return_value = buf_index;
+
+	buf[buf_index] = '\0';
+	while (buf_index)
+	{
+		buf[--buf_index] = numerals[a % base];
+		if (dec_pos == 1)
+			buf[--buf_index] = '.';
+		dec_pos--;
+		a /= base;
+	}
+	if (neg)
+		*buf = '-';
+	return return_value;
+}
+
 // Convert a json valid number representation from string to double
 char* stof(char* str, double* out)
 {
@@ -91,10 +209,9 @@ char* read_quote(char* str, char** out)
 	while (*str != '"')
 		str++;
 	str++;
-	char* start = str;
 
 	// Iterator for the object stringval
-	size_t lval = 2;
+	size_t lval = 8;
 	*out = malloc(lval);
 	char* result = *out;
 	size_t valit = 0;
@@ -190,6 +307,127 @@ struct JSON
 	struct JSON* next;
 };
 
+JSON* json_create_empty()
+{
+	JSON* object = calloc(1, sizeof(JSON));
+	object->type = JSON_TINVALID;
+	return object;
+}
+JSON* json_create_null()
+{
+	JSON* object = calloc(1, sizeof(JSON));
+	object->type = JSON_TNULL;
+	return object;
+}
+
+JSON* json_create_string(const char* str)
+{
+	JSON* object = calloc(1, sizeof(JSON));
+	object->type = JSON_TSTRING;
+	size_t lstr = strlen(str);
+	object->stringval = malloc(lstr + 1);
+	memcpy(object->stringval, str, lstr);
+	object->stringval[lstr] = '\0';
+	return object;
+}
+
+JSON* json_create_number(double value)
+{
+	JSON* object = calloc(1, sizeof(JSON));
+	object->type = JSON_TNUMBER;
+	object->numval = value;
+	return object;
+}
+
+JSON* json_create_object()
+{
+	JSON* object = calloc(1, sizeof(JSON));
+	object->type = JSON_TOBJECT;
+	return object;
+}
+
+JSON* json_create_array()
+{
+	JSON* object = calloc(1, sizeof(JSON));
+	object->type = JSON_TARRAY;
+	return object;
+}
+
+#define WRITE_NAME                                                                                                     \
+	if (object->name)                                                                                                  \
+	{                                                                                                                  \
+		ss_write(ss, "\"");                                                                                            \
+		ss_write(ss, object->name);                                                                                    \
+		ss_write(ss, "\": ");                                                                                          \
+	}
+
+void json_tostring_internal(JSON* object, struct StringStream* ss)
+{
+	if (object->type == JSON_TOBJECT)
+	{
+		WRITE_NAME;
+		ss_write(ss, "{");
+
+		JSON* it = object->members;
+		while (it)
+		{
+			json_tostring_internal(it, ss);
+			it = it->next;
+			if (it)
+				ss_write(ss, ", ");
+		}
+		ss_write(ss, "}");
+	}
+	else if (object->type == JSON_TARRAY)
+	{
+		WRITE_NAME;
+		ss_write(ss, "[");
+
+		JSON* it = object->members;
+		while (it)
+		{
+			json_tostring_internal(it, ss);
+			it = it->next;
+			if (it)
+				ss_write(ss, ", ");
+		}
+		ss_write(ss, "]");
+	}
+	else if (object->type == JSON_TSTRING)
+	{
+		WRITE_NAME;
+		ss_write(ss, "\"");
+
+		ss_write(ss, object->stringval);
+		ss_write(ss, "\"");
+	}
+	else if (object->type == JSON_TNUMBER)
+	{
+		WRITE_NAME;
+		char buf[64];
+		ftos(object->numval, buf, 5);
+		ss_write(ss, buf);
+	}
+	else if (object->type == JSON_TBOOL)
+	{
+		WRITE_NAME;
+		ss_write(ss, object->numval ? "true" : "false");
+	}
+	else if (object->type == JSON_TNULL)
+	{
+		WRITE_NAME;
+		ss_write(ss, "null");
+	}
+}
+
+char* json_tostring(JSON* object)
+{
+	struct StringStream ss = {0};
+
+	json_tostring_internal(object, &ss);
+	return ss.str;
+}
+
 JSON* json_loadfile(const char* filepath)
 {
 	FILE* fp;
@@ -238,7 +476,6 @@ char* json_load(JSON* object, char* str)
 		object->type = JSON_TOBJECT;
 		int in_quotes = 0;
 
-		char* opening_quote = NULL;
 		char* tmp_name = NULL;
 		str++;
 		for (; *str != '\0'; str++)
@@ -255,7 +492,7 @@ char* json_load(JSON* object, char* str)
 				char* tmp = read_quote(str, &tmp_name);
 				if (tmp == NULL)
 				{
-					JSON_MSG_FUNC("Error reading characters in string\n");
+					JSON_MSG_FUNC("Error reading characters in string \"%.50s\"\n", str);
 					break;
 				}
 				str = tmp;
@@ -300,8 +537,14 @@ char* json_load(JSON* object, char* str)
 					if (IS_WHITESPACE(*str))
 						continue;
 					JSON_MSG_FUNC("Unexpected character before comma\n");
-					return str;
+					return NULL;
 				}
+				if (*str == '\0')
+				{
+					JSON_MSG_FUNC("Expected comma before end of string\n");
+					return NULL;
+				}
+				continue;
 			}
 
 			// The end of the object
@@ -309,6 +552,9 @@ char* json_load(JSON* object, char* str)
 			{
 				return str + 1;
 			}
+
+			JSON_MSG_FUNC("Expected property before \"%.50s\"\n", str);
+			return str;
 		}
 	}
 
@@ -316,7 +562,6 @@ char* json_load(JSON* object, char* str)
 	else if (str[0] == '[')
 	{
 		object->type = JSON_TARRAY;
-		int in_quotes = 0;
 
 		str++;
 		for (; *str != '\0'; str++)
@@ -358,7 +603,7 @@ char* json_load(JSON* object, char* str)
 						return str + 1;
 					if (IS_WHITESPACE(*str))
 						continue;
-					JSON_MSG_FUNC("Unexpected character before comma\n");
+					JSON_MSG_FUNC("Unexpected character before comma \"%.50s\"\n");
 					return str;
 				}
 			}
@@ -434,7 +679,8 @@ void json_add_member(JSON* object, const char* name, JSON* value)
 			value->next = it->next;
 			value->prev = it->prev;
 			it->next->prev = value;
-			it->prev->next = value;
+			if (it->prev)
+				it->prev->next = value;
 			return;
 		}
 		it = it->next;
