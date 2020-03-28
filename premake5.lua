@@ -17,6 +17,15 @@ function gen_tests()
 			links "m"
 			files (v)
 
+			-- For posix compliant systems
+			filter "system:linux or bsd or hurd or aix or solaris or haiku or macosx"
+				defines { "JSON_USE_POSIX" }
+				links { "m" }
+
+			-- For windows
+			filter "system:windows"
+				defines { "JSON_USE_WINAPI" }
+
 			filter "configurations:Debug"
 				defines { "DEBUG=1", "RELEASE=0" }
 				optimize "off"
@@ -52,6 +61,15 @@ project "json"
 	links "m"
 	
 	files { "src/**.h", "src/**.c" }
+
+	-- For posix compliant systems
+	filter "system:linux or bsd or hurd or aix or solaris or haiku or macosx"
+		defines { "JSON_USE_POSIX" }
+		links { "m" }
+	
+	-- For windows
+	filter "system:windows"
+		defines { "JSON_USE_WINAPI" }
 
 	filter "configurations:Debug"
 		defines { "DEBUG=1", "RELEASE=0" }

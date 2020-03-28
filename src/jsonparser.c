@@ -3,6 +3,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
+
+#if JSON_USE_POSIX
+#include <sys/stat.h>
+#elif JSON_USE_WINAPI
+#include <windows.h>
+#else
+#error "Please define either 'JSON_USE_POSIX' or 'JSON_USE_WINAPI' depending on platform"
+#endif
 
 #define IS_WHITESPACE(c) (c == ' ' || c == '\n' || c == '\r' || c == '\t')
 
@@ -358,40 +367,40 @@ JSON* json_create_array()
 	{                                                                                                                  \
 		ss_write(ss, "\"");                                                                                            \
 		ss_write(ss, object->name);                                                                                    \
-		ss_write(ss, "\": ");                                                                                          \
+		ss_write(ss, format ? "\": " : "\":");                                                                                          \
 	}
 
-void json_tostring_internal(JSON* object, struct StringStream* ss)
+void json_tostring_internal(JSON* object, struct StringStream* ss, int format)
 {
-	if (object->type == JSON_TOBJECT)
+	if (object->type == JSON_TOBJECT || object->type == JSON_TARRAY)
 	{
 		WRITE_NAME;
-		ss_write(ss, "{");
+		ss_write(ss, (object->type == JSON_TOBJECT ? "{" : "["));
+		if (format)
+			ss_write(ss, "\n");
 
 		JSON* it = object->members;
 		while (it)
 		{
-			json_tostring_internal(it, ss);
+			if (format)
+				for (size_t i = 0; i < object->depth + 1; i++)
+				{
+					ss_write(ss, "\t");
+				}
+			json_tostring_internal(it, ss, format);
 			it = it->next;
 			if (it)
-				ss_write(ss, ", ");
+				ss_write(ss, (format ? ",\n" : ","));
 		}
-		ss_write(ss, "}");
-	}
-	else if (object->type == JSON_TARRAY)
-	{
-		WRITE_NAME;
-		ss_write(ss, "[");
-
-		JSON* it = object->members;
-		while (it)
+		if (format)
 		{
-			json_tostring_internal(it, ss);
-			it = it->next;
-			if (it)
-				ss_write(ss, ", ");
+			ss_write(ss, "\n");
+			for (size_t i = 0; i < object->depth; i++)
+			{
+				ss_write(ss, "\t");
+			}
 		}
-		ss_write(ss, "]");
+		ss_write(ss, (object->type == JSON_TOBJECT ? "}" : "]"));
 	}
 	else if (object->type == JSON_TSTRING)
 	{
@@ -420,12 +429,74 @@ void json_tostring_internal(JSON* object, struct StringStream* ss)
 	}
 }
 
-char* json_tostring(JSON* object)
+char* json_tostring(JSON* object, int format)
 {
 	struct StringStream ss = {0};
 
-	json_tostring_internal(object, &ss);
+	json_tostring_internal(object, &ss, format);
 	return ss.str;
+}
+
+int json_writefile(JSON* object, const char* filepath, int format)
+{
+// Create directories leading up
+#if JSON_USE_POSIX
+	const char* p = filepath;
+	char tmp_path[FILENAME_MAX];
+	size_t len = 0;
+	struct stat st = {0};
+	for (; *p != '\0'; p++)
+	{
+		// Dir separator hit
+		if (*p == '/')
+		{
+			len = p - filepath;
+
+			memcpy(tmp_path, filepath, len);
+			tmp_path[len] = '\0';
+
+			// Dir already exists
+			if (stat(tmp_path, &st) == 0)
+			{
+				continue;
+			}
+			if (mkdir(tmp_path, 0777))
+			{
+				JSON_MSG_FUNC("Failed to create directory %s\n", tmp_path);
+				return -1;
+			}
+		}
+	}
+#elif JSON_USE_WINAPI
+	char* p = filepath;
+	const char tmp_path[FILENAME_MAX];
+	for (; *p != '\0'; p++)
+	{
+		// Dir separator hit
+		if (*p == '/' || *p == '\\')
+		{
+			size_t len = p - filepath;
+			memcpy(tmp_path, filepath, p - filepath);
+			tmp_path[len] = '\0';
+			CreateDirectoryA(tmp_path, NULL);
+		}
+	}
+#endif
+	FILE* fp = NULL;
+	fp = fopen(filepath, "w");
+	if (fp == NULL)
+	{
+		JSON_MSG_FUNC("Failed to create or open file %s\n", filepath);
+		return -2;
+	}
+	struct StringStream ss = {0};
+	json_tostring_internal(object, &ss, format);
+	fwrite(ss.str, 1, ss.length, fp);
+
+	// Exit
+	free(ss.str);
+	fclose(fp);
+	return 0;
 }
 
 JSON* json_loadfile(const char* filepath)
@@ -453,6 +524,18 @@ JSON* json_loadfile(const char* filepath)
 	if (json_load(root, buf) == NULL)
 	{
 		JSON_MSG_FUNC("File %s contains none or invalid json data\n", filepath);
+		free(root);
+		return NULL;
+	}
+	return root;
+}
+JSON* json_loadstring(char* str)
+{
+	JSON* root = malloc(sizeof(JSON));
+	root->depth = 0;
+	if (json_load(root, str) == NULL)
+	{
+		JSON_MSG_FUNC("String contains none or invalid json data\n");
 		free(root);
 		return NULL;
 	}

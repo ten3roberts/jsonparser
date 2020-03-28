@@ -2,6 +2,9 @@
 
 typedef struct JSON JSON;
 
+#define JSON_COMPACT 0
+#define JSON_FORMAT	 1
+
 #define JSON_TINVALID 0
 #define JSON_TOBJECT  1
 #define JSON_TARRAY	  2
@@ -34,11 +37,24 @@ JSON* json_create_array();
 
 // Allocates and returns a json structure as a string
 // Returned string needs to be manually freed
-// String contains tabs or linefeeds
-char* json_tostring(JSON* object);
+// If format is 0, resulting string will not contain whitespace
+// If format is 1, resulting string will be pretty formatted
+char* json_tostring(JSON* object, int format);
+
+// Writes the json structure to a file
+// Not that the name of the root object, if not NULL, is the file that was read
+// Returns 0 on success
+// Overwrites file
+// Creates the directories leading up to it (JSON_USE_POSIX or JSON_USE_WINAPI need to be defined accordingly)
+// If format is JSON_COMPACT (1), resulting string will not contain whitespace
+// If format is JSON_FORMAT (0), resulting string will be pretty formatted
+int json_writefile(JSON* object, const char* filepath, int format);
 
 // Loads a json file recusively from a file into memory
 JSON* json_loadfile(const char* filepath);
+
+// Loads a json string recursively
+JSON* json_loadstring(char* str);
 
 // Loads a json object from a string
 // Returns a pointer to the end of the object in the beginning string
