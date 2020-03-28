@@ -3,7 +3,7 @@
 	"age": -17,
 	"friends": [
 		{
-			"age": 16,
+			"age": 1.6e6,
 			"name": "Be rt"
 		},
 		{

@@ -35,6 +35,55 @@ JSON* json_create_object();
 // Creates an empty json array with no elements
 JSON* json_create_array();
 
+
+// Will remove a json object's type and free all previous values and members
+// Effectively resets an object while keeping it's parent structure intact
+void json_set_invalid(JSON* object);
+// Sets the value of the json object to a string
+// Previous value is freed
+void json_set_string(JSON* object, const char* str);
+
+// Sets the value of the json object to a number
+// Previous value is freed
+void json_set_number(JSON* object, double num);
+
+// Sets the value of the json object to a bool
+// Previous value is freed
+void json_set_bool(JSON* object, int val);
+
+// Sets the value of the json object to null
+// Previous value is freed
+void json_set_null(JSON* object);
+
+// Returns the type of the json object
+int json_get_type(JSON* object);
+
+// Returns a pointer to the internal string
+// Can be modified
+// Validity of pointer is not guaranteed after json_set_string or similar call
+// Returns NULL if it's not a string type
+char* json_get_string(JSON* object);
+
+// Returns the number value
+// Returns 0 if it's not a number type
+double json_get_number(JSON* object);
+
+// Returns the bool value
+// Returns 0 if it's not a bool type
+int json_get_bool(JSON* object);
+
+// Returns a linked list of the members of a json object
+JSON* json_get_members(JSON* object);
+
+// Returns the member with the specified name in a json object
+JSON* json_get_member(JSON* object, const char* name);
+
+// Returns a linked list of the elements of a json array
+JSON* json_get_elements(JSON* object);
+
+// Returns the next item in the list element is a part of
+JSON* json_get_next(JSON* element);
+
 // Allocates and returns a json structure as a string
 // Returned string needs to be manually freed
 // If format is 0, resulting string will not contain whitespace
@@ -62,6 +111,7 @@ JSON* json_loadstring(char* str);
 char* json_load(JSON* object, char* str);
 
 // Insert a member to a json object with name
+// If an object of that name already exists, it is overwritten
 void json_add_member(JSON* object, const char* name, JSON* value);
 
 // Insert an element to the end of a json array

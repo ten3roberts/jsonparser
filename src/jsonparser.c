@@ -15,6 +15,16 @@
 
 #define IS_WHITESPACE(c) (c == ' ' || c == '\n' || c == '\r' || c == '\t')
 
+// Returns a copy of str
+char* strduplicate(const char* str)
+{
+	const size_t lstr = strlen(str);
+	char* dup = malloc(lstr + 1);
+	memcpy(dup, str, lstr);
+	dup[lstr] = '\0';
+	return dup;
+}
+
 struct StringStream
 {
 	// The internal string pointer
@@ -364,6 +374,7 @@ struct JSON
 	char* stringval;
 	double numval;
 	struct JSON* members;
+	size_t count;
 
 	// Linked list to the other members
 	// First elements are more recent
@@ -371,6 +382,7 @@ struct JSON
 	struct JSON* next;
 };
 
+// Constructors
 JSON* json_create_empty()
 {
 	JSON* object = calloc(1, sizeof(JSON));
@@ -389,9 +401,7 @@ JSON* json_create_string(const char* str)
 	JSON* object = calloc(1, sizeof(JSON));
 	object->type = JSON_TSTRING;
 	size_t lstr = strlen(str);
-	object->stringval = malloc(lstr + 1);
-	memcpy(object->stringval, str, lstr);
-	object->stringval[lstr] = '\0';
+	object->stringval = strduplicate(str);
 	return object;
 }
 
@@ -415,6 +425,112 @@ JSON* json_create_array()
 	JSON* object = calloc(1, sizeof(JSON));
 	object->type = JSON_TARRAY;
 	return object;
+}
+
+void json_set_invalid(JSON* object)
+{
+	// If previous type was object or array, destroy members
+	if (object->members)
+	{
+		JSON* it = object->members;
+		while (it)
+		{
+			JSON* next = it->next;
+			json_destroy(it);
+			it = next;
+		}
+	}
+	object->count = 0;
+	object->members = NULL;
+	if (object->stringval)
+	{
+		free(object->stringval);
+	}
+	object->type = JSON_TINVALID;
+	object->numval = 0;
+}
+
+// Setters
+void json_set_string(JSON* object, const char* str)
+{
+	json_set_invalid(object);
+	object->type = JSON_TSTRING;
+	object->stringval = strduplicate(str);
+}
+
+void json_set_number(JSON* object, double num)
+{
+	json_set_invalid(object);
+	object->type = JSON_TNUMBER;
+	object->numval = num;
+}
+
+void json_set_bool(JSON* object, int val)
+{
+	json_set_invalid(object);
+	object->type = JSON_TBOOL;
+	object->numval = val;
+}
+
+void json_set_null(JSON* object)
+{
+	json_set_invalid(object);
+	object->type = JSON_TNULL;
+}
+
+int json_get_type(JSON* object)
+{
+	return object->type;
+}
+
+char* json_get_string(JSON* object)
+{
+	return object->stringval;
+}
+
+double json_get_number(JSON* object)
+{
+	return object->numval;
+}
+
+int json_get_bool(JSON* object)
+{
+	return object->numval;
+}
+
+JSON* json_get_members(JSON* object)
+{
+	if (object->type != JSON_TOBJECT)
+		return NULL;
+	return object->members;
+}
+
+JSON* json_get_member(JSON* object, const char* name)
+{
+	if (object->type != JSON_TOBJECT)
+		return NULL;
+	JSON* it = object->members;
+	while (it)
+	{
+		if (strcmp(it->name, name) == 0)
+			return it;
+		it = it->next;
+	}
+	return NULL;
+}
+
+// Returns a linked list of the elements of a json array
+JSON* json_get_elements(JSON* object)
+{
+	if (object->type != JSON_TARRAY)
+		return NULL;
+	return object->members;
+}
+
+// Returns the next item in the list element is a part of
+JSON* json_get_next(JSON* element)
+{
+	return element->next;
 }
 
 #define WRITE_NAME                                \
@@ -578,10 +694,7 @@ JSON* json_loadfile(const char* filepath)
 	fclose(fp);
 
 	JSON* root = malloc(sizeof(JSON));
-	size_t lfilepath = strlen(filepath);
-	root->name = malloc(lfilepath + 1);
-	memcpy(root->name, filepath, lfilepath);
-	root->name[lfilepath] = '\0';
+	root->name = strduplicate(filepath);
 	if (json_load(root, buf) == NULL)
 	{
 		JSON_MSG_FUNC("File %s contains none or invalid json data\n", filepath);
@@ -635,7 +748,7 @@ char* json_load(JSON* object, char* str)
 				char* tmp = read_quote(str, &tmp_name);
 				if (tmp == NULL)
 				{
-					JSON_MSG_FUNC("Error reading characters in string \"%.50s\"\n", str);
+					JSON_MSG_FUNC("Error reading characters in string \"%.15s\"\n", str);
 					break;
 				}
 				str = tmp;
@@ -691,7 +804,7 @@ char* json_load(JSON* object, char* str)
 				continue;
 			}
 
-			JSON_MSG_FUNC("Expected property before \"%.50s\"\n", str);
+			JSON_MSG_FUNC("Expected property before \"%.15s\"\n", str);
 			return str;
 		}
 	}
@@ -741,7 +854,7 @@ char* json_load(JSON* object, char* str)
 						return str + 1;
 					if (IS_WHITESPACE(*str))
 						continue;
-					JSON_MSG_FUNC("Unexpected character before comma \"%.50s\"\n");
+					JSON_MSG_FUNC("Unexpected character before comma \"%.15s\"\n");
 					return str;
 				}
 			}
@@ -794,10 +907,13 @@ char* json_load(JSON* object, char* str)
 
 void json_add_member(JSON* object, const char* name, JSON* value)
 {
-	size_t lname = strlen(name);
-	value->name = malloc(lname + 1);
-	memcpy(value->name, name, lname);
-	value->name[lname] = '\0';
+	if (object->type != JSON_TOBJECT)
+	{
+		json_set_invalid(object);
+	}
+	object->type = JSON_TOBJECT;
+	object->count++;
+	value->name = strduplicate(name);
 
 	if (object->members == NULL)
 	{
@@ -807,26 +923,40 @@ void json_add_member(JSON* object, const char* name, JSON* value)
 
 	// Traverse to end of array and look for duplicate
 	JSON* it = object->members;
-	while (it->next)
+	while (it)
 	{
 		// Replace duplicate
 		if (strcmp(value->name, it->name) == 0)
 		{
 			value->next = it->next;
 			value->prev = it->prev;
-			it->next->prev = value;
+			if (it->next)
+				it->next->prev = value;
 			if (it->prev)
 				it->prev->next = value;
+			json_destroy(it);
+			return;
+		}
+		// At end
+		if (it->next == NULL)
+		{
+			it->next = value;
+			value->prev = it;
 			return;
 		}
 		it = it->next;
 	}
-	it->next = value;
-	value->prev = it;
 }
 
 void json_add_element(JSON* object, JSON* element)
 {
+	if (object->type != JSON_TARRAY)
+	{
+		json_set_invalid(object);
+	}
+	object->type = JSON_TARRAY;
+	object->count++;
+
 	if (object->members == NULL)
 	{
 		object->members = element;
@@ -845,6 +975,13 @@ void json_add_element(JSON* object, JSON* element)
 
 void json_insert_element(JSON* object, size_t index, JSON* element)
 {
+	if (object->type != JSON_TARRAY)
+	{
+		json_set_invalid(object);
+	}
+	object->type = JSON_TARRAY;
+	object->count++;
+
 	JSON* it = object->members;
 	size_t i = 0;
 	// Jump to index or end of array
