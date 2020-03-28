@@ -26,13 +26,62 @@ struct StringStream
 	size_t length;
 };
 
-void ss_write(struct StringStream* ss, char* str)
+#define WRITE_ESCAPE(c)           \
+	escaped_str[escapedi] = '\\';  \
+	escaped_str[escapedi + 1] = c; \
+	escapedi++;
+
+// Writes to string stream
+// If escape is 1, control characters will be escaped as two characters
+// Escaping decreases performance
+void ss_write(struct StringStream* ss, const char* str, int escape)
 {
 	if (str == NULL)
 	{
 		JSON_MSG_FUNC("Error writing invalid string");
 	}
-	const size_t lstr = strlen(str);
+
+	size_t lstr = strlen(str);
+	char* escaped_str = NULL;
+	if (escape)
+	{
+		// Worst case, expect all characters to be escaped and fit \0
+		escaped_str = malloc(2 * lstr + 1);
+
+		// Allocated size
+		// Look for control characters
+		size_t stri = 0, escapedi = 0;
+		for (; stri < lstr; stri++, escapedi++)
+		{
+			switch (str[stri])
+			{
+			case '"':
+				WRITE_ESCAPE('"');
+				break;
+			case '\b':
+				WRITE_ESCAPE('b');
+				break;
+			case '\f':
+				WRITE_ESCAPE('f');
+				break;
+			case '\n':
+				WRITE_ESCAPE('n');
+				break;
+			case '\r':
+				WRITE_ESCAPE('r');
+				break;
+			case '\t':
+				WRITE_ESCAPE('t');
+				break;
+			default:
+				escaped_str[escapedi] = str[stri];
+				break;
+			}
+		}
+		lstr = escapedi;
+		escaped_str[lstr] = '\0';
+	}
+
 	// Allocate first time
 	if (ss->str == NULL)
 	{
@@ -55,10 +104,14 @@ void ss_write(struct StringStream* ss, char* str)
 	}
 
 	// Copy data
-	memcpy(ss->str + ss->length, str, lstr);
+	memcpy(ss->str + ss->length, escape ? escaped_str : str, lstr);
 	ss->length += lstr;
 	// Null terminate
 	ss->str[ss->length] = '\0';
+	if (escape)
+	{
+		free(escaped_str);
+	}
 }
 
 float max(float a, float b)
@@ -280,7 +333,7 @@ char* read_quote(char* str, char** out)
 			continue;
 		}
 
-		if (IS_WHITESPACE(c))
+		if (c == '\\' || c == '\b' || c == '\f' || c == '\n' || c == '\r' || c == '\t')
 		{
 			JSON_MSG_FUNC("Invalid character in string %10s, control characters must be escaped\n", str);
 			return NULL;
@@ -361,12 +414,12 @@ JSON* json_create_array()
 	return object;
 }
 
-#define WRITE_NAME                                                                                                     \
-	if (object->name)                                                                                                  \
-	{                                                                                                                  \
-		ss_write(ss, "\"");                                                                                            \
-		ss_write(ss, object->name);                                                                                    \
-		ss_write(ss, format ? "\": " : "\":");                                                                         \
+#define WRITE_NAME                                \
+	if (object->name)                             \
+	{                                             \
+		ss_write(ss, "\"", 0);                    \
+		ss_write(ss, object->name, 1);            \
+		ss_write(ss, format ? "\": " : "\":", 0); \
 	}
 
 void json_tostring_internal(JSON* object, struct StringStream* ss, int format, size_t depth)
@@ -374,9 +427,9 @@ void json_tostring_internal(JSON* object, struct StringStream* ss, int format, s
 	if (object->type == JSON_TOBJECT || object->type == JSON_TARRAY)
 	{
 		WRITE_NAME;
-		ss_write(ss, (object->type == JSON_TOBJECT ? "{" : "["));
+		ss_write(ss, (object->type == JSON_TOBJECT ? "{" : "["), 0);
 		if (format)
-			ss_write(ss, "\n");
+			ss_write(ss, "\n", 0);
 
 		JSON* it = object->members;
 		while (it)
@@ -386,48 +439,48 @@ void json_tostring_internal(JSON* object, struct StringStream* ss, int format, s
 			{
 				for (size_t i = 0; i < depth + 1; i++)
 				{
-					ss_write(ss, "\t");
+					ss_write(ss, "\t", 0);
 				}
 			}
-			json_tostring_internal(it, ss, format, depth+1);
+			json_tostring_internal(it, ss, format, depth + 1);
 			it = it->next;
 			if (it)
-				ss_write(ss, (format ? ",\n" : ","));
+				ss_write(ss, (format ? ",\n" : ","), 0);
 		}
 		if (format)
 		{
-			ss_write(ss, "\n");
+			ss_write(ss, "\n", 0);
 			for (size_t i = 0; i < depth; i++)
 			{
-				ss_write(ss, "\t");
+				ss_write(ss, "\t", 0);
 			}
 		}
-		ss_write(ss, (object->type == JSON_TOBJECT ? "}" : "]"));
+		ss_write(ss, (object->type == JSON_TOBJECT ? "}" : "]"), 0);
 	}
 	else if (object->type == JSON_TSTRING)
 	{
 		WRITE_NAME;
-		ss_write(ss, "\"");
+		ss_write(ss, "\"", 0);
 
-		ss_write(ss, object->stringval);
-		ss_write(ss, "\"");
+		ss_write(ss, object->stringval, 1);
+		ss_write(ss, "\"", 0);
 	}
 	else if (object->type == JSON_TNUMBER)
 	{
 		WRITE_NAME;
-		char buf[64];
+		char buf[128];
 		ftos(object->numval, buf, 5);
-		ss_write(ss, buf);
+		ss_write(ss, buf, 0);
 	}
 	else if (object->type == JSON_TBOOL)
 	{
 		WRITE_NAME;
-		ss_write(ss, object->numval ? "true" : "false");
+		ss_write(ss, object->numval ? "true" : "false", 0);
 	}
 	else if (object->type == JSON_TNULL)
 	{
 		WRITE_NAME;
-		ss_write(ss, "null");
+		ss_write(ss, "null", 0);
 	}
 }
 
