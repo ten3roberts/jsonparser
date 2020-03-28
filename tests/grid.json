@@ -6,7 +6,7 @@
 	"bindings": [
 		{
 			"binding": 0,
-			"texture": "albedo",
+			"texture": "test",
 			"type": "sampler",
 			"stage": "fragment"
 		},

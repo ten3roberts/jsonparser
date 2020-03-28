@@ -596,9 +596,10 @@ char* json_load(JSON* object, char* str)
 
 				// Load the child element from the string and skip over that string
 				char* tmp_buf = json_load(new_object, str);
-				if (tmp_buf == NULL)
+
+				if (tmp_buf == NULL || new_object->type == JSON_TINVALID)
 				{
-					JSON_MSG_FUNC("Invalid json\n");
+					JSON_MSG_FUNC("Invalid json %.15s\n", str);
 					json_destroy(new_object);
 				}
 				else
@@ -619,7 +620,7 @@ char* json_load(JSON* object, char* str)
 						return str + 1;
 					if (IS_WHITESPACE(*str))
 						continue;
-					JSON_MSG_FUNC("Unexpected character before comma\n");
+					JSON_MSG_FUNC("Unexpected character before comma %.15s\n", str);
 					return NULL;
 				}
 				if (*str == '\0')
@@ -706,7 +707,7 @@ char* json_load(JSON* object, char* str)
 		return read_quote(str, &object->stringval);
 	}
 	// Number
-	else if ((*str > '0' && *str < '9') || *str == '-' || *str == '+')
+	else if ((*str >= '0' && *str <= '9') || *str == '-' || *str == '+')
 	{
 		object->type = JSON_TNUMBER;
 		return stof(str, &object->numval);

@@ -4,7 +4,7 @@
 
 int main()
 {
-	JSON* root = json_loadfile("./tests/example.json");
+	JSON* root = json_loadfile("./tests/grid.json");
 	if (root == NULL)
 	{
 		printf("Invalid file\n");
@@ -12,7 +12,7 @@ int main()
 	}
 	char* str = json_tostring(root, JSON_FORMAT);
 	JSON* root2 = json_loadstring(str);
-	json_writefile(root2, "./tests/out/example.json", 1);
+	json_writefile(root2, "./tests/out/out.json", 1);
 	free(str);
 
 

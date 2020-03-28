@@ -1,10 +1,15 @@
 {
 	"name": "Adam",
-	"age": 17,
+	"age": 0,
 	"friends": [
-		"Bert",
-		"Ceasar",
-		"David"
+		{
+			"age": 16,
+			"name": "Bert"
+		},
+		{
+			"age": 17,
+			"name": "Ceasar"
+		}
 	],
 	"lover": {
 		"name": "Elize",
