@@ -26,7 +26,7 @@ struct StringStream
 	size_t length;
 };
 
-#define WRITE_ESCAPE(c)           \
+#define WRITE_ESCAPE(c)            \
 	escaped_str[escapedi] = '\\';  \
 	escaped_str[escapedi + 1] = c; \
 	escapedi++;
@@ -201,7 +201,10 @@ char* stof(char* str, double* out)
 	// The sign of the resulting value
 	int sign = 1;
 	if (*str == '-')
+	{
 		sign = -1;
+		str++;
+	}
 
 	for (; *str != '\0'; str++)
 	{
