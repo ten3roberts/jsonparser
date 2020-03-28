@@ -307,7 +307,6 @@ struct JSON
 	char* name;
 	char* stringval;
 	double numval;
-	size_t depth;
 	struct JSON* members;
 
 	// Linked list to the other members
@@ -367,10 +366,10 @@ JSON* json_create_array()
 	{                                                                                                                  \
 		ss_write(ss, "\"");                                                                                            \
 		ss_write(ss, object->name);                                                                                    \
-		ss_write(ss, format ? "\": " : "\":");                                                                                          \
+		ss_write(ss, format ? "\": " : "\":");                                                                         \
 	}
 
-void json_tostring_internal(JSON* object, struct StringStream* ss, int format)
+void json_tostring_internal(JSON* object, struct StringStream* ss, int format, size_t depth)
 {
 	if (object->type == JSON_TOBJECT || object->type == JSON_TARRAY)
 	{
@@ -382,12 +381,15 @@ void json_tostring_internal(JSON* object, struct StringStream* ss, int format)
 		JSON* it = object->members;
 		while (it)
 		{
+			// Format with tabs
 			if (format)
-				for (size_t i = 0; i < object->depth + 1; i++)
+			{
+				for (size_t i = 0; i < depth + 1; i++)
 				{
 					ss_write(ss, "\t");
 				}
-			json_tostring_internal(it, ss, format);
+			}
+			json_tostring_internal(it, ss, format, depth+1);
 			it = it->next;
 			if (it)
 				ss_write(ss, (format ? ",\n" : ","));
@@ -395,7 +397,7 @@ void json_tostring_internal(JSON* object, struct StringStream* ss, int format)
 		if (format)
 		{
 			ss_write(ss, "\n");
-			for (size_t i = 0; i < object->depth; i++)
+			for (size_t i = 0; i < depth; i++)
 			{
 				ss_write(ss, "\t");
 			}
@@ -433,7 +435,7 @@ char* json_tostring(JSON* object, int format)
 {
 	struct StringStream ss = {0};
 
-	json_tostring_internal(object, &ss, format);
+	json_tostring_internal(object, &ss, format, 0);
 	return ss.str;
 }
 
@@ -490,7 +492,7 @@ int json_writefile(JSON* object, const char* filepath, int format)
 		return -2;
 	}
 	struct StringStream ss = {0};
-	json_tostring_internal(object, &ss, format);
+	json_tostring_internal(object, &ss, format, 0);
 	fwrite(ss.str, 1, ss.length, fp);
 
 	// Exit
@@ -520,7 +522,10 @@ JSON* json_loadfile(const char* filepath)
 	fclose(fp);
 
 	JSON* root = malloc(sizeof(JSON));
-	root->depth = 0;
+	size_t lfilepath = strlen(filepath);
+	root->name = malloc(lfilepath + 1);
+	memcpy(root->name, filepath, lfilepath);
+	root->name[lfilepath] = '\0';
 	if (json_load(root, buf) == NULL)
 	{
 		JSON_MSG_FUNC("File %s contains none or invalid json data\n", filepath);
@@ -532,7 +537,6 @@ JSON* json_loadfile(const char* filepath)
 JSON* json_loadstring(char* str)
 {
 	JSON* root = malloc(sizeof(JSON));
-	root->depth = 0;
 	if (json_load(root, str) == NULL)
 	{
 		JSON_MSG_FUNC("String contains none or invalid json data\n");
@@ -740,8 +744,6 @@ char* json_load(JSON* object, char* str)
 
 void json_add_member(JSON* object, const char* name, JSON* value)
 {
-	value->depth = object->depth + 1;
-
 	size_t lname = strlen(name);
 	value->name = malloc(lname + 1);
 	memcpy(value->name, name, lname);
@@ -775,8 +777,6 @@ void json_add_member(JSON* object, const char* name, JSON* value)
 
 void json_add_element(JSON* object, JSON* element)
 {
-	element->depth = object->depth + 1;
-
 	if (object->members == NULL)
 	{
 		object->members = element;
@@ -808,7 +808,6 @@ void json_insert_element(JSON* object, size_t index, JSON* element)
 	while (eit->next)
 	{
 		eit = eit->next;
-		eit->depth = object->depth + 1;
 	}
 	eit->next = it->next;
 }

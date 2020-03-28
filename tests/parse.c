@@ -18,5 +18,4 @@ int main()
 
 	json_destroy(root);
 	puts("Done");
-	while(getchar() != '\n');
 }
