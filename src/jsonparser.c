@@ -635,12 +635,6 @@ char* json_load(JSON* object, char* str)
 				continue;
 			}
 
-			// The end of the object
-			if (!in_quotes && *str == '}')
-			{
-				return str + 1;
-			}
-
 			JSON_MSG_FUNC("Expected property before \"%.50s\"\n", str);
 			return str;
 		}
