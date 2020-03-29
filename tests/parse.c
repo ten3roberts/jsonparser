@@ -9,5 +9,7 @@ int main()
 
 	printf("Name = %s\n", json_get_string(json_get_member(root, "name")));
 
+	json_writefile(root, "./tests/out/out.json", JSON_FORMAT);
+
 	json_destroy(root);
 }

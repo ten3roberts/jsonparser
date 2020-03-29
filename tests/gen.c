@@ -32,7 +32,7 @@ int main()
 	JSON* friends = json_create_array();
 	json_add_member(root, "friends", friends);
 
-	for (size_t i = 0; i < 5; i++)
+	for (size_t i = 0; i < 10; i++)
 	{
 		printf("%ld\n", i);
 		json_add_element(friends, person_create(10));

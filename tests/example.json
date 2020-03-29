@@ -1,6 +1,8 @@
 {
 	"name": "Adam",
-	"age": -17,
+	"hunger": 1.43,
+	"balance": 0.05,
+	"age": 0.40559,
 	"friends": [
 		{
 			"age": 1.6e6,
