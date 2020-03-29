@@ -1,4 +1,4 @@
-tests = {"tests/parse.c"}
+tests = {"tests/parse.c", "tests/gen.c"}
 
 function gen_tests()
 	for k, v in pairs(tests) do
@@ -6,7 +6,7 @@ function gen_tests()
 		b=b+1;
 		name = v:sub(b,e);
 		print ("generating test", name)
-		project ("test-" .. name)
+		project ("test_" .. name)
 			kind "ConsoleApp"
 			language "C"
 			targetdir "bin"

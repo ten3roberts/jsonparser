@@ -400,7 +400,6 @@ JSON* json_create_string(const char* str)
 {
 	JSON* object = calloc(1, sizeof(JSON));
 	object->type = JSON_TSTRING;
-	size_t lstr = strlen(str);
 	object->stringval = strduplicate(str);
 	return object;
 }
@@ -730,7 +729,6 @@ char* json_load(JSON* object, char* str)
 	if (str[0] == '{')
 	{
 		object->type = JSON_TOBJECT;
-		int in_quotes = 0;
 
 		char* tmp_name = NULL;
 		str++;
@@ -854,7 +852,7 @@ char* json_load(JSON* object, char* str)
 						return str + 1;
 					if (IS_WHITESPACE(*str))
 						continue;
-					JSON_MSG_FUNC("Unexpected character before comma \"%.15s\"\n");
+					JSON_MSG_FUNC("Unexpected character before comma \"%.15s\"\n", str);
 					return str;
 				}
 			}
