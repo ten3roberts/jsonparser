@@ -1,4 +1,133 @@
-#include "jsonparser.h"
+#ifndef LIBJSON_H
+#define LIBJSON_H
+#include <stddef.h>
+
+typedef struct JSON JSON;
+
+#define JSON_COMPACT 0
+#define JSON_FORMAT	 1
+
+#define JSON_TINVALID 0
+#define JSON_TOBJECT  1
+#define JSON_TARRAY	  2
+#define JSON_TSTRING  4
+#define JSON_TNUMBER  8
+#define JSON_TBOOL	  16
+#define JSON_TNULL	  32
+
+void json_set_msgcallback(void (*func)(const char* msg));
+
+// Creates an empty json with invalid type
+JSON* json_create_empty();
+// Creates a valid json null
+JSON* json_create_null();
+
+// Creates a json string
+// string is copied internally and can be freed afterwards
+JSON* json_create_string(const char* str);
+
+// Creates a json number
+JSON* json_create_number(double value);
+
+// Creates an empty json object with no members
+JSON* json_create_object();
+
+// Creates an empty json array with no elements
+JSON* json_create_array();
+
+// Will remove a json object's type and free all previous values and members
+// Effectively resets an object while keeping it's parent structure intact
+void json_set_invalid(JSON* object);
+// Sets the value of the json object to a string
+// Previous value is freed
+void json_set_string(JSON* object, const char* str);
+
+// Sets the value of the json object to a number
+// Previous value is freed
+void json_set_number(JSON* object, double num);
+
+// Sets the value of the json object to a bool
+// Previous value is freed
+void json_set_bool(JSON* object, int val);
+
+// Sets the value of the json object to null
+// Previous value is freed
+void json_set_null(JSON* object);
+
+// Returns the type of the json object
+int json_get_type(JSON* object);
+
+// Returns a pointer to the internal string
+// Can be modified
+// Validity of pointer is not guaranteed after json_set_string or similar call
+// Returns NULL if it's not a string type
+char* json_get_string(JSON* object);
+
+// Returns the number value
+// Returns 0 if it's not a number type
+double json_get_number(JSON* object);
+
+// Returns the bool value
+// Returns 0 if it's not a bool type
+int json_get_bool(JSON* object);
+
+// Returns a linked list of the members of a json object
+JSON* json_get_members(JSON* object);
+
+// Returns the member with the specified name in a json object
+JSON* json_get_member(JSON* object, const char* name);
+
+// Returns a linked list of the elements of a json array
+JSON* json_get_elements(JSON* object);
+
+// Returns the next item in the list element is a part of
+JSON* json_get_next(JSON* element);
+
+// Allocates and returns a json structure as a string
+// Returned string needs to be manually freed
+// If format is 0, resulting string will not contain whitespace
+// If format is 1, resulting string will be pretty formatted
+char* json_tostring(JSON* object, int format);
+
+// Writes the json structure to a file
+// Not that the name of the root object, if not NULL, is the file that was read
+// Returns 0 on success
+// Overwrites file
+// Creates the directories leading up to it (JSON_USE_POSIX or JSON_USE_WINAPI need to be defined accordingly)
+// If format is JSON_COMPACT (1), resulting string will not contain whitespace
+// If format is JSON_FORMAT (0), resulting string will be pretty formatted
+int json_writefile(JSON* object, const char* filepath, int format);
+
+// Loads a json file recusively from a file into memory
+JSON* json_loadfile(const char* filepath);
+
+// Loads a json string recursively
+JSON* json_loadstring(char* str);
+
+// Loads a json object from a string
+// Returns a pointer to the end of the object in the beginning string
+// NOTE : should not be used on an existing object, object needs to be empty or destroyed
+char* json_load(JSON* object, char* str);
+
+// Insert a member to a json object with name
+// If an object of that name already exists, it is overwritten
+void json_add_member(JSON* object, const char* name, JSON* value);
+
+// Insert an element to the end of a json array
+void json_add_element(JSON* object, JSON* element);
+
+// Insert an element into arbitrary position in a json array
+// If index is greater than the length of the array, element will be inserted at the end
+// if element is a linked list, the whole list will be inserted in order
+void json_insert_element(JSON* object, size_t index, JSON* element);
+
+// Recursively destroys and frees an object
+// Will NOT destroy subsequent objects in its array
+void json_destroy(JSON* object);
+
+// End of header
+// Implementation
+#ifdef JSON_IMPLEMENTATION
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +142,23 @@
 #error "Please define either 'JSON_USE_POSIX' or 'JSON_USE_WINAPI' depending on platform"
 #endif
 
-#define IS_WHITESPACE(c) (c == ' ' || c == '\n' || c == '\r' || c == '\t')
+#define JSON_IS_WHITESPACE(c) (c == ' ' || c == '\n' || c == '\r' || c == '\t')
+
+static void json_msg_default(const char* msg)
+{
+	puts(msg);
+}
+
+static void (*json_msg_func)(const char* msg) = json_msg_default;
+
+void json_set_msgcallback(void (*func)(const char* msg))
+{
+	json_msg_func = func;
+}
+
+#define JSON_MSG(m)    \
+	if (json_msg_func) \
+		json_msg_func(m);
 
 // Returns a copy of str
 char* strduplicate(const char* str)
@@ -25,7 +170,7 @@ char* strduplicate(const char* str)
 	return dup;
 }
 
-struct StringStream
+struct JSONStringStream
 {
 	// The internal string pointer
 	char* str;
@@ -44,11 +189,11 @@ struct StringStream
 // Writes to string stream
 // If escape is 1, control characters will be escaped as two characters
 // Escaping decreases performance
-void ss_write(struct StringStream* ss, const char* str, int escape)
+void json_ss_write(struct JSONStringStream* ss, const char* str, int escape)
 {
 	if (str == NULL)
 	{
-		JSON_MSG_FUNC("Error writing invalid string");
+		JSON_MSG("Error writing invalid string");
 	}
 
 	size_t lstr = strlen(str);
@@ -107,7 +252,7 @@ void ss_write(struct StringStream* ss, const char* str, int escape)
 		char* tmp = realloc(ss->str, ss->size);
 		if (tmp == NULL)
 		{
-			JSON_MSG_FUNC("Failed to allocate memory for string stream\n");
+			JSON_MSG("Failed to allocate memory for string stream");
 			return;
 		}
 		ss->str = tmp;
@@ -124,7 +269,7 @@ void ss_write(struct StringStream* ss, const char* str, int escape)
 	}
 }
 
-float max(float a, float b)
+float json_max(float a, float b)
 {
 	return (a > b ? a : b);
 }
@@ -133,7 +278,7 @@ float max(float a, float b)
 // Precision indicates the max digits to include after the comma
 // Prints up to precision digits after the comma, can write less. Can be used to print integers, where the comma is not
 // written Returns how many characters were written
-int ftos(double num, char* buf, int precision)
+int json_ftos(double num, char* buf, int precision)
 {
 	if (isinf(num))
 	{
@@ -182,7 +327,6 @@ int ftos(double num, char* buf, int precision)
 
 	size_t digitcount = log10(a) + 1;
 	size_t buf_index = digitcount + neg + (dec_pos >= digitcount ? dec_pos - digitcount + 1 : 0) + (dec_pos ? 1 : 0);
-	// size_t buf_index = log10(a) + (dec_pos ? 2 : 1) + max(dec_pos - log10(a), 0) + neg;
 	int return_value = buf_index;
 
 	buf[buf_index] = '\0';
@@ -200,7 +344,7 @@ int ftos(double num, char* buf, int precision)
 }
 
 // Convert a json valid number representation from string to double
-char* stof(char* str, double* out)
+char* json_stof(char* str, double* out)
 {
 	double result = 0;
 	// Signifies if read past period
@@ -233,7 +377,7 @@ char* stof(char* str, double* out)
 		{
 			if (isexponent)
 			{
-				JSON_MSG_FUNC("Can't have stacked exponents\n");
+				JSON_MSG("Can't have stacked exponents");
 				return 0;
 			}
 			isexponent = 1;
@@ -281,7 +425,7 @@ char* stof(char* str, double* out)
 
 // Reads from start quote to end quote and takes escape characters into consideration
 // Allocates memory for output string; need to be freed manually
-char* read_quote(char* str, char** out)
+char* json_read_quote(char* str, char** out)
 {
 	// Skip past start quote
 	while (*str != '"')
@@ -305,7 +449,7 @@ char* read_quote(char* str, char** out)
 			char* tmp = realloc(*out, lval);
 			if (tmp == NULL)
 			{
-				JSON_MSG_FUNC("Failed to allocate memory for string value\n");
+				JSON_MSG("Failed to allocate memory for string value");
 				return str;
 			}
 			*out = tmp;
@@ -342,7 +486,7 @@ char* read_quote(char* str, char** out)
 				result[valit++] = '\t';
 				break;
 			default:
-				JSON_MSG_FUNC("Invalid escape sequence\n");
+				JSON_MSG("Invalid escape sequence");
 				break;
 			}
 			str++;
@@ -351,7 +495,9 @@ char* read_quote(char* str, char** out)
 
 		if (c == '\\' || c == '\b' || c == '\f' || c == '\n' || c == '\r' || c == '\t')
 		{
-			JSON_MSG_FUNC("Invalid character in string %10s, control characters must be escaped\n", str);
+			char msg[512];
+			snprintf(msg, sizeof msg, "Invalid character in string %10s, control characters must be escaped", str);
+			JSON_MSG(msg);
 			return NULL;
 		}
 
@@ -365,7 +511,7 @@ char* read_quote(char* str, char** out)
 		// Normal character
 		result[valit++] = c;
 	}
-	JSON_MSG_FUNC("Unexpected end of string\n");
+	JSON_MSG("Unexpected end of string");
 	return str;
 }
 
@@ -535,22 +681,22 @@ JSON* json_get_next(JSON* element)
 	return element->next;
 }
 
-#define WRITE_NAME                                \
-	if (object->name)                             \
-	{                                             \
-		ss_write(ss, "\"", 0);                    \
-		ss_write(ss, object->name, 1);            \
-		ss_write(ss, format ? "\": " : "\":", 0); \
+#define WRITE_NAME                                     \
+	if (object->name)                                  \
+	{                                                  \
+		json_ss_write(ss, "\"", 0);                    \
+		json_ss_write(ss, object->name, 1);            \
+		json_ss_write(ss, format ? "\": " : "\":", 0); \
 	}
 
-void json_tostring_internal(JSON* object, struct StringStream* ss, int format, size_t depth)
+void json_tostring_internal(JSON* object, struct JSONStringStream* ss, int format, size_t depth)
 {
 	if (object->type == JSON_TOBJECT || object->type == JSON_TARRAY)
 	{
 		WRITE_NAME;
-		ss_write(ss, (object->type == JSON_TOBJECT ? "{" : "["), 0);
+		json_ss_write(ss, (object->type == JSON_TOBJECT ? "{" : "["), 0);
 		if (format)
-			ss_write(ss, "\n", 0);
+			json_ss_write(ss, "\n", 0);
 
 		JSON* it = object->members;
 		while (it)
@@ -560,54 +706,54 @@ void json_tostring_internal(JSON* object, struct StringStream* ss, int format, s
 			{
 				for (size_t i = 0; i < depth + 1; i++)
 				{
-					ss_write(ss, "\t", 0);
+					json_ss_write(ss, "\t", 0);
 				}
 			}
 			json_tostring_internal(it, ss, format, depth + 1);
 			it = it->next;
 			if (it)
-				ss_write(ss, (format ? ",\n" : ","), 0);
+				json_ss_write(ss, (format ? ",\n" : ","), 0);
 		}
 		if (format)
 		{
-			ss_write(ss, "\n", 0);
+			json_ss_write(ss, "\n", 0);
 			for (size_t i = 0; i < depth; i++)
 			{
-				ss_write(ss, "\t", 0);
+				json_ss_write(ss, "\t", 0);
 			}
 		}
-		ss_write(ss, (object->type == JSON_TOBJECT ? "}" : "]"), 0);
+		json_ss_write(ss, (object->type == JSON_TOBJECT ? "}" : "]"), 0);
 	}
 	else if (object->type == JSON_TSTRING)
 	{
 		WRITE_NAME;
-		ss_write(ss, "\"", 0);
+		json_ss_write(ss, "\"", 0);
 
-		ss_write(ss, object->stringval, 1);
-		ss_write(ss, "\"", 0);
+		json_ss_write(ss, object->stringval, 1);
+		json_ss_write(ss, "\"", 0);
 	}
 	else if (object->type == JSON_TNUMBER)
 	{
 		WRITE_NAME;
 		char buf[128];
-		ftos(object->numval, buf, 5);
-		ss_write(ss, buf, 0);
+		json_ftos(object->numval, buf, 5);
+		json_ss_write(ss, buf, 0);
 	}
 	else if (object->type == JSON_TBOOL)
 	{
 		WRITE_NAME;
-		ss_write(ss, object->numval ? "true" : "false", 0);
+		json_ss_write(ss, object->numval ? "true" : "false", 0);
 	}
 	else if (object->type == JSON_TNULL)
 	{
 		WRITE_NAME;
-		ss_write(ss, "null", 0);
+		json_ss_write(ss, "null", 0);
 	}
 }
 
 char* json_tostring(JSON* object, int format)
 {
-	struct StringStream ss = {0};
+	struct JSONStringStream ss = {0};
 
 	json_tostring_internal(object, &ss, format, 0);
 	return ss.str;
@@ -638,7 +784,9 @@ int json_writefile(JSON* object, const char* filepath, int format)
 			}
 			if (mkdir(tmp_path, 0777))
 			{
-				JSON_MSG_FUNC("Failed to create directory %s\n", tmp_path);
+				char msg[512];
+				snprintf(msg, sizeof msg, "Failed to create directory %s", tmp_path);
+				JSON_MSG(msg);
 				return -1;
 			}
 		}
@@ -662,10 +810,13 @@ int json_writefile(JSON* object, const char* filepath, int format)
 	fp = fopen(filepath, "w");
 	if (fp == NULL)
 	{
-		JSON_MSG_FUNC("Failed to create or open file %s\n", filepath);
+
+		char msg[512];
+		snprintf(msg, sizeof msg, "Failed to create or open file %s", filepath);
+		JSON_MSG(msg);
 		return -2;
 	}
-	struct StringStream ss = {0};
+	struct JSONStringStream ss = {0};
 	json_tostring_internal(object, &ss, format, 0);
 	fwrite(ss.str, 1, ss.length, fp);
 
@@ -681,7 +832,9 @@ JSON* json_loadfile(const char* filepath)
 	fp = fopen(filepath, "r");
 	if (fp == NULL)
 	{
-		JSON_MSG_FUNC("Failed to open file %s\n", filepath);
+		char msg[512];
+		snprintf(msg, sizeof msg, "Failed to open file %s", filepath);
+		JSON_MSG(msg);
 		return NULL;
 	}
 
@@ -699,7 +852,9 @@ JSON* json_loadfile(const char* filepath)
 	root->name = strduplicate(filepath);
 	if (json_load(root, buf) == NULL)
 	{
-		JSON_MSG_FUNC("File %s contains none or invalid json data\n", filepath);
+		char msg[512];
+		snprintf(msg, sizeof msg, "File %s contains none or invalid json data", filepath);
+		JSON_MSG(msg);
 		free(root);
 		return NULL;
 	}
@@ -710,7 +865,7 @@ JSON* json_loadstring(char* str)
 	JSON* root = malloc(sizeof(JSON));
 	if (json_load(root, str) == NULL)
 	{
-		JSON_MSG_FUNC("String contains none or invalid json data\n");
+		JSON_MSG("String contains none or invalid json data");
 		free(root);
 		return NULL;
 	}
@@ -738,7 +893,7 @@ char* json_load(JSON* object, char* str)
 		for (; *str != '\0'; str++)
 		{
 			// Skip whitespace
-			if (IS_WHITESPACE(*str))
+			if (JSON_IS_WHITESPACE(*str))
 			{
 				continue;
 			}
@@ -746,10 +901,12 @@ char* json_load(JSON* object, char* str)
 			// Read the name
 			if (*str == '"')
 			{
-				char* tmp = read_quote(str, &tmp_name);
+				char* tmp = json_read_quote(str, &tmp_name);
 				if (tmp == NULL)
 				{
-					JSON_MSG_FUNC("Error reading characters in string \"%.15s\"\n", str);
+					char msg[512];
+					snprintf(msg, sizeof msg, "Error reading characters in string \"%.15s\"", str);
+					JSON_MSG(msg);
 					break;
 				}
 				str = tmp;
@@ -773,7 +930,9 @@ char* json_load(JSON* object, char* str)
 
 				if (tmp_buf == NULL || new_object->type == JSON_TINVALID)
 				{
-					JSON_MSG_FUNC("Invalid json %.15s\n", str);
+					char msg[512];
+					snprintf(msg, sizeof msg, "Invalid json %.15s", str);
+					JSON_MSG(msg);
 					json_destroy(new_object);
 				}
 				else
@@ -792,20 +951,24 @@ char* json_load(JSON* object, char* str)
 						break;
 					if (*str == '}')
 						return str + 1;
-					if (IS_WHITESPACE(*str))
+					if (JSON_IS_WHITESPACE(*str))
 						continue;
-					JSON_MSG_FUNC("Unexpected character before comma %.15s\n", str);
+					char msg[512];
+				snprintf(msg, sizeof msg, "Unexpected character before comma %.15s", str);
+				JSON_MSG(msg);
 					return NULL;
 				}
 				if (*str == '\0')
 				{
-					JSON_MSG_FUNC("Expected comma before end of string\n");
+					JSON_MSG("Expected comma before end of string");
 					return NULL;
 				}
 				continue;
 			}
 
-			JSON_MSG_FUNC("Expected property before \"%.15s\"\n", str);
+			char msg[512];
+			snprintf(msg, sizeof msg, "Expected property before \"%.15s\"", str);
+			JSON_MSG(msg);
 			return str;
 		}
 	}
@@ -819,7 +982,7 @@ char* json_load(JSON* object, char* str)
 		for (; *str != '\0'; str++)
 		{
 			// Skip whitespace
-			if (IS_WHITESPACE(*str))
+			if (JSON_IS_WHITESPACE(*str))
 				continue;
 
 			// The end of the array
@@ -835,7 +998,7 @@ char* json_load(JSON* object, char* str)
 				char* tmp_buf = json_load(new_object, str);
 				if (tmp_buf == NULL)
 				{
-					JSON_MSG_FUNC("Invalid json\n");
+					JSON_MSG("Invalid json");
 					json_destroy(new_object);
 				}
 				else
@@ -853,9 +1016,11 @@ char* json_load(JSON* object, char* str)
 						break;
 					if (*str == ']')
 						return str + 1;
-					if (IS_WHITESPACE(*str))
+					if (JSON_IS_WHITESPACE(*str))
 						continue;
-					JSON_MSG_FUNC("Unexpected character before comma \"%.15s\"\n", str);
+					char msg[512];
+					snprintf(msg, sizeof msg, "Unexpected character before comma \"%.15s\"\n", str);
+					JSON_MSG(msg);
 					return str;
 				}
 			}
@@ -872,13 +1037,13 @@ char* json_load(JSON* object, char* str)
 	else if (str[0] == '"')
 	{
 		object->type = JSON_TSTRING;
-		return read_quote(str, &object->stringval);
+		return json_read_quote(str, &object->stringval);
 	}
 	// Number
 	else if ((*str >= '0' && *str <= '9') || *str == '-' || *str == '+')
 	{
 		object->type = JSON_TNUMBER;
-		return stof(str, &object->numval);
+		return json_stof(str, &object->numval);
 	}
 
 	// Bool true
@@ -1026,3 +1191,5 @@ void json_destroy(JSON* object)
 
 	free(object);
 }
+#endif
+#endif
