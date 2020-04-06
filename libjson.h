@@ -35,7 +35,7 @@ JSON* json_create_object();
 // Creates an empty json array with no elements
 JSON* json_create_array();
 
-// Will remove a json object's type and free all previous values and members
+// Will remove a json object's type and JSON_FREE all previous values and members
 // Effectively resets an object while keeping it's parent structure intact
 void json_set_invalid(JSON* object);
 // Sets the value of the json object to a string
@@ -134,12 +134,21 @@ void json_destroy(JSON* object);
 #include <math.h>
 #include <limits.h>
 
-#if JSON_USE_POSIX
+#ifndef JSON_MALLOC
+#define JSON_MALLOC(s) malloc(s)
+#endif
+#ifndef JSON_FREE
+#define JSON_FREE(p) free(p)
+#endif
+#ifndef JSON_REALLOC
+#define JSON_REALLOC(p, s) realloc(p, s)
+#endif
+
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <sys/stat.h>
-#elif JSON_USE_WINAPI
+#endif
+#if defined(_WIN32) || defined(WIN32) 
 #include <windows.h>
-#else
-#error "Please define either 'JSON_USE_POSIX' or 'JSON_USE_WINAPI' depending on platform"
 #endif
 
 #define JSON_IS_WHITESPACE(c) (c == ' ' || c == '\n' || c == '\r' || c == '\t')
@@ -164,7 +173,7 @@ void json_set_msgcallback(void (*func)(const char* msg))
 char* strduplicate(const char* str)
 {
 	const size_t lstr = strlen(str);
-	char* dup = malloc(lstr + 1);
+	char* dup = JSON_MALLOC(lstr + 1);
 	memcpy(dup, str, lstr);
 	dup[lstr] = '\0';
 	return dup;
@@ -201,7 +210,7 @@ void json_ss_write(struct JSONStringStream* ss, const char* str, int escape)
 	if (escape)
 	{
 		// Worst case, expect all characters to be escaped and fit \0
-		escaped_str = malloc(2 * lstr + 1);
+		escaped_str = JSON_MALLOC(2 * lstr + 1);
 
 		// Allocated size
 		// Look for control characters
@@ -241,7 +250,7 @@ void json_ss_write(struct JSONStringStream* ss, const char* str, int escape)
 	if (ss->str == NULL)
 	{
 		ss->size = 8;
-		ss->str = malloc(8);
+		ss->str = JSON_MALLOC(8);
 	}
 
 	// Resize
@@ -249,7 +258,7 @@ void json_ss_write(struct JSONStringStream* ss, const char* str, int escape)
 	{
 
 		ss->size = ss->size << (size_t)log2(lstr + 1);
-		char* tmp = realloc(ss->str, ss->size);
+		char* tmp = JSON_REALLOC(ss->str, ss->size);
 		if (tmp == NULL)
 		{
 			JSON_MSG("Failed to allocate memory for string stream");
@@ -265,7 +274,7 @@ void json_ss_write(struct JSONStringStream* ss, const char* str, int escape)
 	ss->str[ss->length] = '\0';
 	if (escape)
 	{
-		free(escaped_str);
+		JSON_FREE(escaped_str);
 	}
 }
 
@@ -434,7 +443,7 @@ char* json_read_quote(char* str, char** out)
 
 	// Iterator for the object stringval
 	size_t lval = 8;
-	*out = malloc(lval);
+	*out = JSON_MALLOC(lval);
 	char* result = *out;
 	size_t valit = 0;
 	// Loop to end of quote
@@ -446,7 +455,7 @@ char* json_read_quote(char* str, char** out)
 		if (valit + 1 >= lval)
 		{
 			lval *= 2;
-			char* tmp = realloc(*out, lval);
+			char* tmp = JSON_REALLOC(*out, lval);
 			if (tmp == NULL)
 			{
 				JSON_MSG("Failed to allocate memory for string value");
@@ -592,7 +601,7 @@ void json_set_invalid(JSON* object)
 	object->members = NULL;
 	if (object->stringval)
 	{
-		free(object->stringval);
+		JSON_FREE(object->stringval);
 	}
 	object->type = JSON_TINVALID;
 	object->numval = 0;
@@ -821,7 +830,7 @@ int json_writefile(JSON* object, const char* filepath, int format)
 	fwrite(ss.str, 1, ss.length, fp);
 
 	// Exit
-	free(ss.str);
+	JSON_FREE(ss.str);
 	fclose(fp);
 	return 0;
 }
@@ -843,30 +852,30 @@ JSON* json_loadfile(const char* filepath)
 	size_t size;
 	fseek(fp, 0L, SEEK_END);
 	size = ftell(fp);
-	buf = malloc(size);
+	buf = JSON_MALLOC(size);
 	fseek(fp, 0L, SEEK_SET);
 	fread(buf, 1, size, fp);
 	fclose(fp);
 
-	JSON* root = malloc(sizeof(JSON));
+	JSON* root = JSON_MALLOC(sizeof(JSON));
 	root->name = strduplicate(filepath);
 	if (json_load(root, buf) == NULL)
 	{
 		char msg[512];
 		snprintf(msg, sizeof msg, "File %s contains none or invalid json data", filepath);
 		JSON_MSG(msg);
-		free(root);
+		JSON_FREE(root);
 		return NULL;
 	}
 	return root;
 }
 JSON* json_loadstring(char* str)
 {
-	JSON* root = malloc(sizeof(JSON));
+	JSON* root = JSON_MALLOC(sizeof(JSON));
 	if (json_load(root, str) == NULL)
 	{
 		JSON_MSG("String contains none or invalid json data");
-		free(root);
+		JSON_FREE(root);
 		return NULL;
 	}
 	return root;
@@ -923,7 +932,7 @@ char* json_load(JSON* object, char* str)
 					str++;
 
 				// Load the json with what is after the ':'
-				JSON* new_object = malloc(sizeof(JSON));
+				JSON* new_object = JSON_MALLOC(sizeof(JSON));
 
 				// Load the child element from the string and skip over that string
 				char* tmp_buf = json_load(new_object, str);
@@ -942,7 +951,7 @@ char* json_load(JSON* object, char* str)
 
 				// Insert member
 				json_add_member(object, tmp_name, new_object);
-				free(tmp_name);
+				JSON_FREE(tmp_name);
 
 				// Skip to next comma or quit
 				for (; *str != '\0'; str++)
@@ -992,7 +1001,7 @@ char* json_load(JSON* object, char* str)
 			// Read elements of array
 
 			{
-				JSON* new_object = malloc(sizeof(JSON));
+				JSON* new_object = JSON_MALLOC(sizeof(JSON));
 
 				// Load the element from the string
 				char* tmp_buf = json_load(new_object, str);
@@ -1177,19 +1186,19 @@ void json_destroy(JSON* object)
 
 	if (object->name)
 	{
-		free(object->name);
+		JSON_FREE(object->name);
 		object->name = NULL;
 	}
 	if (object->stringval)
 	{
-		free(object->stringval);
+		JSON_FREE(object->stringval);
 		object->stringval = NULL;
 	}
 
 	object->numval = 0;
 	object->type = JSON_TINVALID;
 
-	free(object);
+	JSON_FREE(object);
 }
 #endif
 #endif
