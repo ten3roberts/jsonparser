@@ -858,15 +858,17 @@ JSON* json_loadfile(const char* filepath)
 	fclose(fp);
 
 	JSON* root = JSON_MALLOC(sizeof(JSON));
-	root->name = strduplicate(filepath);
 	if (json_load(root, buf) == NULL)
 	{
 		char msg[512];
 		snprintf(msg, sizeof msg, "File %s contains none or invalid json data", filepath);
 		JSON_MSG(msg);
 		JSON_FREE(root);
+		JSON_FREE(buf);
 		return NULL;
 	}
+	root->name = strduplicate(filepath);
+	JSON_FREE(buf);
 	return root;
 }
 JSON* json_loadstring(char* str)
