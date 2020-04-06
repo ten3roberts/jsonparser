@@ -54,6 +54,9 @@ void json_set_bool(JSON* object, int val);
 // Previous value is freed
 void json_set_null(JSON* object);
 
+// Returns the name/key of the object, NULL if an element in array
+const char* json_get_name(JSON* object);
+
 // Returns the type of the json object
 int json_get_type(JSON* object);
 
@@ -109,6 +112,14 @@ JSON* json_loadstring(char* str);
 // NOTE : should not be used on an existing object, object needs to be empty or destroyed
 char* json_load(JSON* object, char* str);
 
+// Removes and returns a member from the json structure
+// Returns NULL if member was not found
+JSON* json_remove_member(JSON* object, const char* name);
+
+// Removes and returns an element from the json structure
+// Returns NULL if element was not found
+JSON* json_remove_element(JSON* object, size_t index);
+
 // Insert a member to a json object with name
 // If an object of that name already exists, it is overwritten
 void json_add_member(JSON* object, const char* name, JSON* value);
@@ -123,6 +134,7 @@ void json_insert_element(JSON* object, size_t index, JSON* element);
 
 // Recursively destroys and frees an object
 // Will NOT destroy subsequent objects in its array
+// Element should be remove from parent before calling destroy
 void json_destroy(JSON* object);
 
 // End of header
@@ -144,10 +156,10 @@ void json_destroy(JSON* object);
 #define JSON_REALLOC(p, s) realloc(p, s)
 #endif
 
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
 #include <sys/stat.h>
 #endif
-#if defined(_WIN32) || defined(WIN32) 
+#if defined(_WIN32) || defined(WIN32)
 #include <windows.h>
 #endif
 
@@ -635,6 +647,11 @@ void json_set_null(JSON* object)
 	object->type = JSON_TNULL;
 }
 
+const char* json_get_name(JSON* object)
+{
+	return object->name;
+}
+
 int json_get_type(JSON* object)
 {
 	return object->type;
@@ -965,8 +982,8 @@ char* json_load(JSON* object, char* str)
 					if (JSON_IS_WHITESPACE(*str))
 						continue;
 					char msg[512];
-				snprintf(msg, sizeof msg, "Unexpected character before comma %.15s", str);
-				JSON_MSG(msg);
+					snprintf(msg, sizeof msg, "Unexpected character before comma %.15s", str);
+					JSON_MSG(msg);
 					return NULL;
 				}
 				if (*str == '\0')
@@ -1079,6 +1096,74 @@ char* json_load(JSON* object, char* str)
 		return str + 4;
 	}
 
+	return NULL;
+}
+
+// Removes and returns a member from the json structure
+JSON* json_remove_member(JSON* object, const char* name)
+{
+	if (object->type != JSON_TOBJECT)
+		return NULL;
+	JSON* it = object->members;
+	while (it)
+	{
+		if (strcmp(it->name, name) == 0)
+		{
+			// Disconnect head
+			if (it->prev == NULL)
+			{
+				object->members = it->next;
+				it->next->prev = NULL;
+			}
+			// Disconnect and reconnect chain
+			else
+			{
+				it->prev->next = it->next;
+				if (it->next)
+					it->next->prev = it->prev;
+			}
+
+			it->prev = NULL;
+			it->next = NULL;
+			return it;
+		}
+		it = it->next;
+	}
+	return NULL;
+}
+
+// Removes and returns an element from the json structure
+JSON* json_remove_element(JSON* object, size_t index)
+{
+	if (object->type != JSON_TARRAY)
+		return NULL;
+	size_t i = 0;
+	JSON* it = object->members;
+	while (it)
+	{
+		if (i == index)
+		{
+			// Disconnect head
+			if (it->prev = NULL)
+			{
+				object->members = it->next;
+				it->next->prev = NULL;
+			}
+			// Disconnect and reconnect chain
+			else
+			{
+				it->prev->next = it->next;
+				if (it->next)
+					it->next->prev = it->prev;
+			}
+
+			it->prev = NULL;
+			it->next = NULL;
+			return it;
+		}
+		it = it->next;
+		i++;
+	}
 	return NULL;
 }
 
