@@ -81,3 +81,5 @@ Null is a valid json type and has no other use than indicate the absence of a va
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+
+The license is also included in the header libjson.h for single file implementation
