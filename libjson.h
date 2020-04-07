@@ -118,19 +118,20 @@ JSON* json_remove_member(JSON* object, const char* name);
 
 // Removes and returns an element from the json structure
 // Returns NULL if element was not found
-JSON* json_remove_element(JSON* object, size_t index);
+// Note: This will not free the object returned
+JSON* json_remove_element(JSON* object, int pos);
 
 // Insert a member to a json object with name
 // If an object of that name already exists, it is overwritten
 void json_add_member(JSON* object, const char* name, JSON* value);
 
-// Insert an element to the end of a json array
-void json_add_element(JSON* object, JSON* element);
-
 // Insert an element into arbitrary position in a json array
 // If index is greater than the length of the array, element will be inserted at the end
 // if element is a linked list, the whole list will be inserted in order
-void json_insert_element(JSON* object, size_t index, JSON* element);
+void json_insert_element(JSON* object, int pos, JSON* element);
+
+// Insert an element to the beginning of a json array
+void json_add_element(JSON* object, JSON* element);
 
 // Recursively destroys and frees an object
 // Will NOT destroy subsequent objects in its array
@@ -544,11 +545,9 @@ struct JSON
 	char* stringval;
 	double numval;
 	struct JSON* members;
-	size_t count;
-
+	int count;
 	// Linked list to the other members
 	// First elements are more recent
-	struct JSON* prev;
 	struct JSON* next;
 };
 
@@ -601,12 +600,12 @@ void json_set_invalid(JSON* object)
 	// If previous type was object or array, destroy members
 	if (object->members)
 	{
-		JSON* it = object->members;
-		while (it)
+		JSON* cur = object->members;
+		while (cur)
 		{
-			JSON* next = it->next;
-			json_destroy(it);
-			it = next;
+			JSON* next = cur->next;
+			json_destroy(cur);
+			cur = next;
 		}
 	}
 	object->count = 0;
@@ -683,12 +682,12 @@ JSON* json_get_member(JSON* object, const char* name)
 {
 	if (object->type != JSON_TOBJECT)
 		return NULL;
-	JSON* it = object->members;
-	while (it)
+	JSON* cur = object->members;
+	while (cur)
 	{
-		if (strcmp(it->name, name) == 0)
-			return it;
-		it = it->next;
+		if (strcmp(cur->name, name) == 0)
+			return cur;
+		cur = cur->next;
 	}
 	return NULL;
 }
@@ -724,8 +723,8 @@ void json_tostring_internal(JSON* object, struct JSONStringStream* ss, int forma
 		if (format)
 			json_ss_write(ss, "\n", 0);
 
-		JSON* it = object->members;
-		while (it)
+		JSON* cur = object->members;
+		while (cur)
 		{
 			// Format with tabs
 			if (format)
@@ -735,9 +734,9 @@ void json_tostring_internal(JSON* object, struct JSONStringStream* ss, int forma
 					json_ss_write(ss, "\t", 0);
 				}
 			}
-			json_tostring_internal(it, ss, format, depth + 1);
-			it = it->next;
-			if (it)
+			json_tostring_internal(cur, ss, format, depth + 1);
+			cur = cur->next;
+			if (cur)
 				json_ss_write(ss, (format ? ",\n" : ","), 0);
 		}
 		if (format)
@@ -902,13 +901,13 @@ JSON* json_loadstring(char* str)
 
 char* json_load(JSON* object, char* str)
 {
+	object->type = JSON_TINVALID;
+
 	object->name = NULL;
-	object->next = NULL;
 	object->stringval = NULL;
 	object->numval = 0;
-	object->type = JSON_TINVALID;
 	object->members = NULL;
-	object->prev = NULL;
+	object->count = 0;
 	object->next = NULL;
 
 	// Object
@@ -1104,67 +1103,66 @@ JSON* json_remove_member(JSON* object, const char* name)
 {
 	if (object->type != JSON_TOBJECT)
 		return NULL;
-	JSON* it = object->members;
-	while (it)
+	JSON* cur = object->members;
+	JSON* prev = NULL;
+	while (cur && strcmp(cur->name, name) != 0)
 	{
-		if (strcmp(it->name, name) == 0)
-		{
-			// Disconnect head
-			if (it->prev == NULL)
-			{
-				object->members = it->next;
-				it->next->prev = NULL;
-			}
-			// Disconnect and reconnect chain
-			else
-			{
-				it->prev->next = it->next;
-				if (it->next)
-					it->next->prev = it->prev;
-			}
-
-			it->prev = NULL;
-			it->next = NULL;
-			return it;
-		}
-		it = it->next;
+		prev = cur;
+		cur = cur->next;
 	}
-	return NULL;
+	// Name was not found
+	if (cur == NULL)
+	{
+		return NULL;
+	}
+
+	object->count--;
+	// Handle first item
+	// Set to the following item or NULL
+	if (prev == NULL)
+	{
+		object->members = cur->next;
+		return cur;
+	}
+
+	// Middle and end
+
+	prev->next = cur->next;
+	return cur;
 }
 
 // Removes and returns an element from the json structure
-JSON* json_remove_element(JSON* object, size_t index)
+JSON* json_remove_element(JSON* object, int pos)
 {
 	if (object->type != JSON_TARRAY)
 		return NULL;
-	size_t i = 0;
-	JSON* it = object->members;
-	while (it)
+	JSON* cur = object->members;
+	JSON* prev = NULL;
+	int idx = 0;
+	// Loop to either index or end of list
+	while (cur != NULL && idx != pos)
 	{
-		if (i == index)
-		{
-			// Disconnect head
-			if (it->prev = NULL)
-			{
-				object->members = it->next;
-				it->next->prev = NULL;
-			}
-			// Disconnect and reconnect chain
-			else
-			{
-				it->prev->next = it->next;
-				if (it->next)
-					it->next->prev = it->prev;
-			}
-
-			it->prev = NULL;
-			it->next = NULL;
-			return it;
-		}
-		it = it->next;
-		i++;
+		prev = cur;
+		cur = cur->next;
 	}
-	return NULL;
+
+	// Index was not found
+	if (cur == NULL)
+	{
+		return NULL;
+	}
+	object->count--;
+	// Handle first item
+	// Set to the following item or NULL
+	if (prev == NULL)
+	{
+		object->members = cur->next;
+		return cur;
+	}
+
+	// Middle and end
+	prev->next = cur->next;
+	return cur;
 }
 
 void json_add_member(JSON* object, const char* name, JSON* value)
@@ -1174,9 +1172,10 @@ void json_add_member(JSON* object, const char* name, JSON* value)
 		json_set_invalid(object);
 	}
 	object->type = JSON_TOBJECT;
-	object->count++;
+
 	value->name = strduplicate(name);
 
+	// If list is empty
 	if (object->members == NULL)
 	{
 		object->members = value;
@@ -1184,33 +1183,35 @@ void json_add_member(JSON* object, const char* name, JSON* value)
 	}
 
 	// Traverse to end of array and look for duplicate
-	JSON* it = object->members;
-	while (it)
+	JSON* cur = object->members;
+	JSON* prev = NULL;
+	while (cur && strcmp(cur->name, name) != 0)
 	{
-		// Replace duplicate
-		if (strcmp(value->name, it->name) == 0)
-		{
-			value->next = it->next;
-			value->prev = it->prev;
-			if (it->next)
-				it->next->prev = value;
-			if (it->prev)
-				it->prev->next = value;
-			json_destroy(it);
-			return;
-		}
-		// At end
-		if (it->next == NULL)
-		{
-			it->next = value;
-			value->prev = it;
-			return;
-		}
-		it = it->next;
+		prev = cur;
+		cur = cur->next;
 	}
+
+	// No duplicate, insert at end
+	if (cur == NULL)
+	{
+		object->count++;
+		prev->next = value;
+		return;
+	}
+	// Duplicate
+	value->next = cur->next;
+
+	if (prev)
+		prev->next = value;
+	// Handle beginning of list
+	else
+		object->members = value;
+
+	json_destroy(cur);
+	return;
 }
 
-void json_add_element(JSON* object, JSON* element)
+void json_insert_element(JSON* object, int pos, JSON* element)
 {
 	if (object->type != JSON_TARRAY)
 	{
@@ -1218,57 +1219,51 @@ void json_add_element(JSON* object, JSON* element)
 	}
 	object->type = JSON_TARRAY;
 	object->count++;
-
+	// List is empty
 	if (object->members == NULL)
 	{
 		object->members = element;
 		return;
 	}
 
-	JSON* it = object->members;
-	// Traverse to end of array
-	while (it->next)
+	JSON* cur = object->members;
+	JSON* prev = NULL;
+	int idx = 0;
+	// Jump to index or end of array
+	while (cur != NULL && idx != pos)
 	{
-		it = it->next;
+		idx++;
+		prev = cur;
+		cur = cur->next;
 	}
-	it->next = element;
-	element->prev = it;
+
+	// Insert
+	// Beginning
+	if (prev == NULL)
+	{
+		object->members = element;
+		element->next = cur;
+		return;
+	}
+
+	// End or middle
+	prev->next = element;
+	element->next = cur;
 }
 
-void json_insert_element(JSON* object, size_t index, JSON* element)
+void json_add_element(JSON* object, JSON* element)
 {
-	if (object->type != JSON_TARRAY)
-	{
-		json_set_invalid(object);
-	}
-	object->type = JSON_TARRAY;
-	object->count++;
-
-	JSON* it = object->members;
-	size_t i = 0;
-	// Jump to index or end of array
-	while (i < index && it->next)
-	{
-		it = it->next;
-		i++;
-	}
-	element->prev = it;
-	JSON* eit = element;
-	while (eit->next)
-	{
-		eit = eit->next;
-	}
-	eit->next = it->next;
+	json_insert_element(object, 0, element);
 }
 
 void json_destroy(JSON* object)
 {
-	JSON* it = object->members;
-	while (it)
+	JSON* cur = object->members;
+	while (cur)
 	{
-		JSON* next = it->next;
-		json_destroy(it);
-		it = next;
+		JSON* next = cur->next;
+		json_destroy(cur);
+		cur = next;
 	}
 
 	if (object->name)
