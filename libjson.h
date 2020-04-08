@@ -743,7 +743,7 @@ JSON* json_get_next(JSON* element)
 }
 
 #define WRITE_NAME                                     \
-	if (object->name)                                  \
+	if (ss->str && object->name)                       \
 	{                                                  \
 		json_ss_write(ss, "\"", 0);                    \
 		json_ss_write(ss, object->name, 1);            \
