@@ -50,7 +50,7 @@ int main()
 		json_add_member(person, "balance", json_create_number(rand() / (double)RAND_MAX * 1000));
 		json_add_element(friends, person);
 	}
-	json_remove_element(friends, 1);
+	json_destroy_member(root, "friends");
 	json_writefile(root, "./tests/out/out.json", JSON_FORMAT);
 
 	json_destroy(root);

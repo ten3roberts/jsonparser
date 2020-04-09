@@ -129,14 +129,21 @@ JSON* json_loadstring(char* str);
 // NOTE : should not be used on an existing object, object needs to be empty or destroyed
 char* json_load(JSON* object, char* str);
 
+// Destroys a member from the json structure
+void json_destroy_member(JSON* object, const char* name);
+
+// Destroys an element from the json structure
+void json_destroy_element(JSON* object, int pos);
+
 // Removes and returns a member from the json structure
 // Returns NULL if member was not found
-JSON* json_remove_member(JSON* object, const char* name);
+// Note: This will not free the object returned
+JSON* json_pop_member(JSON* object, const char* name);
 
 // Removes and returns an element from the json structure
 // Returns NULL if element was not found
 // Note: This will not free the object returned
-JSON* json_remove_element(JSON* object, int pos);
+JSON* json_pop_element(JSON* object, int pos);
 
 // Insert a member to a json object with name
 // If an object of that name already exists, it is overwritten
@@ -1134,8 +1141,22 @@ char* json_load(JSON* object, char* str)
 	return NULL;
 }
 
+void json_destroy_member(JSON* object, const char* name)
+{
+	JSON* member = json_pop_member(object, name);
+	if (member)
+		json_destroy(member);
+}
+
+void json_destroy_element(JSON* object, int pos)
+{
+	JSON* element = json_pop_element(object, pos);
+	if (element)
+		json_destroy(element);
+}
+
 // Removes and returns a member from the json structure
-JSON* json_remove_member(JSON* object, const char* name)
+JSON* json_pop_member(JSON* object, const char* name)
 {
 	if (object->type != JSON_TOBJECT)
 		return NULL;
@@ -1185,7 +1206,7 @@ JSON* json_remove_member(JSON* object, const char* name)
 }
 
 // Removes and returns an element from the json structure
-JSON* json_remove_element(JSON* object, int pos)
+JSON* json_pop_element(JSON* object, int pos)
 {
 	if (object->type != JSON_TARRAY)
 		return NULL;
