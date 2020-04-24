@@ -164,7 +164,7 @@ void json_destroy(JSON* object);
 
 // End of header
 // Implementation
-#ifdef JSON_IMPLEMENTATION
+#ifdef LIBJSON_IMPLEMENTATION
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

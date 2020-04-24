@@ -5,17 +5,17 @@ Libjson is a small and easy to use library for parsing, reading, and generating 
 ## What it does
 
 ## Integrating and building
-To use libjson in your program copy the header into your project and include it whilst defining JSON_IMPLEMENTATION in one C file to build it
+To use libjson in your program copy the header into your project and include it whilst defining LIBJSON_IMPLEMENTATION in one C file to build it
 
 Example:
 ```
 #include <stdio.h>
-#define JSON_IMPLEMENTATION
+#define LIBJSON_IMPLEMENTATION
 #include "libjson.h"
 
 ...
 ```
-Libjson can be included several times, but only one C file can define JSON_IMPLEMENTATION
+Libjson can be included several times, but only one C file can define LIBJSON_IMPLEMENTATION
 
 ## Configuration
 Configuring of the library is done at build time by defining zero or more of below macros before the header include in the same file as MP_IMPLEMENTATION

@@ -1,4 +1,4 @@
-#define JSON_IMPLEMENTATION
+#define LIBJSON_IMPLEMENTATION
 #define MP_IMPLEMENTATION
 #define MP_CHECK_FULL
 #include "magpie.h"
