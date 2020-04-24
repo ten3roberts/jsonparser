@@ -20,8 +20,8 @@ Libjson can be included several times, but only one C file can define LIBJSON_IM
 ## Configuration
 Configuring of the library is done at build time by defining zero or more of below macros before the header include in the same file as MP_IMPLEMENTATION
 
-* define JSON_MALLOC, JSON_REALLOC, and JSON_FREE to use your own allocators instead of the standard library
-* json_set_msgcallback to set your own message callback, default is puts. NULL is valid and will supress all messages
+* JSON_MALLOC, JSON_REALLOC, and JSON_FREE to use your own allocators instead of the standard library
+* JSON_MESSAGE (default fputs(m, stderr)) to set your own message callback.
 
 ## Types
 The library represents all json types with the JSON structure
@@ -43,7 +43,7 @@ Arrays are an ordered collection of values
 In libjson they are both represented as children of a JSON structure with type JSON_TOBJECT or JSON_TARRAY
 Each child is a JSON struct on it's own and contains the name and the value of the pair. This means that the members can be looked at independently from the parent object since they store their own name
 
-The children are stores in a double linked list. The difference between object members and array elements is that the name is NULL
+The children are stored in a double linked list. The difference between object members and array elements is that the name is NULL
 
 To retrieve a member of a certain name, use json_get_member(object), this iterates the linked list until a match is found, and returns NULL if no match is found at end
 
