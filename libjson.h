@@ -300,7 +300,7 @@ struct JSONStringStream
 // Writes to string stream
 // If escape is 1, control characters will be escaped as two characters
 // Escaping decreases performance
-void json_ss_write(struct JSONStringStream* ss, const char* str, int escape)
+static void json_ss_write(struct JSONStringStream* ss, const char* str, int escape)
 {
 	if (str == NULL)
 	{
@@ -380,16 +380,11 @@ void json_ss_write(struct JSONStringStream* ss, const char* str, int escape)
 	}
 }
 
-float json_max(float a, float b)
-{
-	return (a > b ? a : b);
-}
-
 // Converts a double to a string
 // Precision indicates the max digits to include after the comma
 // Prints up to precision digits after the comma, can write less. Can be used to print integers, where the comma is not
 // written Returns how many characters were written
-int json_ftos(double num, char* buf, int precision)
+static int json_ftos(double num, char* buf, int precision)
 {
 	if (isinf(num))
 	{
@@ -455,7 +450,7 @@ int json_ftos(double num, char* buf, int precision)
 }
 
 // Convert a json valid number representation from string to double
-char* json_stof(char* str, double* out)
+static char* json_stof(char* str, double* out)
 {
 	double result = 0;
 	// Signifies if read past period
@@ -536,7 +531,7 @@ char* json_stof(char* str, double* out)
 
 // Reads from start quote to end quote and takes escape characters into consideration
 // Allocates memory for output string; need to be freed manually
-char* json_read_quote(char* str, char** out)
+static char* json_read_quote(char* str, char** out)
 {
 	// Skip past start quote
 	while (*str != '"')
